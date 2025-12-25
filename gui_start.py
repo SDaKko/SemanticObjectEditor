@@ -8,6 +8,7 @@ import script as script_module
 from regex import *
 import data, json, sys, os, subprocess, time
 import dictionary_of_transitions.build_dictionary as build_dictionary
+import graph_metrics
 import re
 
 characteristics = {}
@@ -125,6 +126,47 @@ class App:
         # Кнопка для записи объекта в файл
         self.button_save_obj = ttk.Button(self.job_button_frame, text="Сохранить объект", state=DISABLED, command=self.save_object)
         self.button_save_obj.grid(row=0, column=1, padx=5, pady=5)
+        
+        # Фрейм для метрик графа
+        metrics_frame = ttk.LabelFrame(frame_results, text="Метрики графа", width=frame_width - 690)
+        metrics_frame.grid(row=5, column=0, padx=5, pady=5, sticky="ew")
+        
+        # Поле для отображения метрик
+        self.metrics_txt = tk.Text(metrics_frame, width=frame_width - 690, height=4, state=tk.DISABLED)
+        self.metrics_txt.grid(row=0, column=0, padx=5, pady=5)
+        
+        # Фрейм для категорий характеристик
+        categories_frame = ttk.LabelFrame(frame_results, text="Категории характеристик по метрикам", width=frame_width - 690)
+        categories_frame.grid(row=6, column=0, padx=5, pady=5, sticky="ew")
+        
+        # Поле для отображения категорий
+        self.categories_txt = tk.Text(categories_frame, width=frame_width - 690, height=8, state=tk.DISABLED)
+        self.categories_txt.grid(row=0, column=0, padx=5, pady=5)
+        
+        # Скроллбар для категорий
+        categories_scrollbar = ttk.Scrollbar(categories_frame, orient="vertical", command=self.categories_txt.yview)
+        categories_scrollbar.grid(row=0, column=1, sticky='ns')
+        self.categories_txt['yscrollcommand'] = categories_scrollbar.set
+        
+        # Фрейм для выбора типа градации
+        gradation_frame = ttk.Frame(frame_results)
+        gradation_frame.grid(row=7, column=0, padx=5, pady=5)
+        
+        # Метка для выбора градации
+        gradation_label = tk.Label(gradation_frame, text="Тип градации:")
+        gradation_label.grid(row=0, column=0, padx=5, pady=5)
+        
+        # Переменная для выбора типа градации
+        self.gradation_type = tk.StringVar(value="simple")
+        
+        # Радиокнопки для выбора типа градации
+        simple_radio = ttk.Radiobutton(gradation_frame, text="Простая (0.5, 0.75, 1.0)", 
+                                       variable=self.gradation_type, value="simple")
+        simple_radio.grid(row=0, column=1, padx=5, pady=5)
+        
+        detailed_radio = ttk.Radiobutton(gradation_frame, text="Детальная (0.5-1.0)", 
+                                         variable=self.gradation_type, value="detailed")
+        detailed_radio.grid(row=0, column=2, padx=5, pady=5)
 
     def confirm_action(self):
         return messagebox.askyesno("Подтверждение", "Вы уверены, что хотите сохранить характеристики?")
@@ -368,6 +410,46 @@ class App:
     def insert_name(self, name):
         self.name_obj_txt.delete(1.0, tk.END)  # Очищаем текстовое поле
         self.name_obj_txt.insert(tk.INSERT, name)
+    
+    def display_metrics(self, metrics):
+        """Отображает метрики графа в интерфейсе"""
+        self.metrics_txt.configure(state=tk.NORMAL)
+        self.metrics_txt.delete(1.0, tk.END)
+        
+        metrics_text = f"Вершины (характеристики): {metrics['vertices']}\n"
+        metrics_text += f"Дуги (переходы): {metrics['edges']}\n"
+        metrics_text += f"Плотность графа: {metrics['density']}\n"
+        metrics_text += f"Оценка сложности: {metrics['complexity_score']:.3f}"
+        
+        self.metrics_txt.insert(tk.INSERT, metrics_text)
+        self.metrics_txt.configure(state=tk.DISABLED)
+    
+    def display_categories(self, categories_data):
+        """Отображает категории характеристик в интерфейсе"""
+        self.categories_txt.configure(state=tk.NORMAL)
+        self.categories_txt.delete(1.0, tk.END)
+        
+        categories_text = f"Всего вершин: {categories_data['total_vertices']}, Всего дуг: {categories_data['total_edges']}\n"
+        categories_text += f"Используемая градация: {', '.join([str(g) for g in categories_data['gradation']])}\n"
+        categories_text += "=" * 60 + "\n\n"
+        
+        # Сортируем категории по значению (от меньшего к большему)
+        sorted_categories = sorted(categories_data['categories'].items(), key=lambda x: float(x[0]))
+        
+        for category, data in sorted_categories:
+            categories_text += f"Категория {category} (сложность ≤ {category}):\n"
+            categories_text += f"  Количество характеристик: {data['count']}\n"
+            categories_text += f"  Характеристики: {', '.join(data['characteristics'])}\n"
+            
+            # Добавляем детали для каждой характеристики
+            for detail in data['details']:
+                categories_text += f"    - {detail['char']}: исходящих дуг={detail['local_edges']}, "
+                categories_text += f"локальная сложность={detail['local_complexity']}\n"
+            
+            categories_text += "\n"
+        
+        self.categories_txt.insert(tk.INSERT, categories_text)
+        self.categories_txt.configure(state=tk.DISABLED)
 
     # ------------------------------------------------------------------- ГЕНЕРАЦИЯ -------------------------------------------------------------------
 
@@ -388,11 +470,11 @@ class App:
 
         # Прогрессбар
         self.progress = ttk.Progressbar(frame_results, orient='horizontal', length=100, mode='determinate')
-        self.progress.grid(row=6, column=0, padx=5, pady=5)
+        self.progress.grid(row=8, column=0, padx=5, pady=5)
 
         # Метка для статуса
         self.status_label = tk.Label(frame_results, text=f"Осталось потоков: {len_tps}")
-        self.status_label.grid(row=7, column=0, padx=5, pady=5)
+        self.status_label.grid(row=9, column=0, padx=5, pady=5)
 
         scripts = []  # Список для хранения созданных скриптов
 
@@ -449,6 +531,16 @@ class App:
 
             dict_char = script_module.build_dict_char(scripts)
             print("Словарь хар-к объекта: ", dict_char)
+
+            # Вычисляем метрики графа и категории характеристик
+            gradation_type = self.gradation_type.get()
+            categories_data = graph_metrics.get_characteristics_by_category(dict_char, gradation_type)
+            
+            # Отображаем метрики
+            self.display_metrics(categories_data['metrics'])
+            
+            # Отображаем категории характеристик
+            self.display_categories(categories_data)
 
             print("*" * 20)
 
