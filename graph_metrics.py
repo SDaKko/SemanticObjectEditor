@@ -1,19 +1,91 @@
 # Файл graph_metrics.py
 # Вычисление метрик графа и разделение характеристик по градации
+import math
+
+
+# def calculate_graph_metrics(dict_char):
+#     """
+#     Вычисляет метрики графа на основе словаря характеристик.
+#
+#     Args:
+#         dict_char: Словарь характеристик {характеристика: [список_следующих]}
+#
+#     Returns:
+#         dict: Словарь с метриками:
+#             - vertices: количество вершин (уникальных характеристик)
+#             - edges: количество дуг (уникальные переходы)
+#             - density: плотность графа (edges / vertices)
+#             - complexity_score: оценка сложности (0.0 - 1.0)
+#     """
+#     if not dict_char:
+#         return {
+#             'vertices': 0,
+#             'edges': 0,
+#             'density': 0.0,
+#             'complexity_score': 0.0
+#         }
+#
+#     # Количество вершин (уникальных характеристик)
+#     vertices = len(dict_char)
+#
+#     # Количество дуг (уникальные переходы)
+#     # Сначала проверим структуру данных
+#     unique_edges = set()
+#
+#     for char, next_chars in dict_char.items():
+#         # Преобразуем next_chars в список, если это не список
+#         if not isinstance(next_chars, list):
+#             if next_chars:  # Если это не пустая строка или не None
+#                 next_chars = [next_chars]
+#             else:
+#                 next_chars = []
+#
+#         # Используем множество для удаления дубликатов в списке следующих характеристик
+#         unique_next_chars = set(next_chars)
+#         for next_char in unique_next_chars:
+#             if next_char:  # Игнорируем пустые значения
+#                 unique_edges.add((char, next_char))
+#
+#     edges = len(unique_edges)
+#
+#     # Плотность графа (отношение дуг к вершинам)
+#     # Для полного графа максимальная плотность = vertices * (vertices - 1)
+#     if vertices <= 1:
+#         max_possible_edges = 0
+#         density = 0.0
+#     else:
+#         max_possible_edges = vertices * (vertices - 1)
+#         density = edges / max_possible_edges if max_possible_edges > 0 else 0.0
+#
+#     # Оценка сложности на основе метрик
+#     # Нормализуем значения для получения оценки от 0.0 до 1.0
+#     # Используем комбинацию количества вершин, дуг и плотности
+#     # vertices_score = min(vertices / 10.0, 1.0)  # Нормализуем до 10 вершин
+#     # edges_score = min(edges / 20.0, 1.0)  # Нормализуем до 20 дуг
+#
+#     # Логарифмическая шкала — учитывает рост, но сглаживает
+#     vertices_score = min(math.log(vertices + 1) / math.log(50), 1.0)
+#     edges_score = min(math.log(edges + 1) / math.log(100), 1.0)
+#     density_score = density  # Уже нормализовано
+#
+#     # Взвешенная комбинация метрик
+#     complexity_score = (vertices_score * 0.3 + edges_score * 0.4 + density_score * 0.3)
+#     complexity_score = min(complexity_score, 1.0)  # Ограничиваем до 1.0
+#
+#     return {
+#         'vertices': vertices,
+#         'edges': edges,
+#         'density': round(density, 3),
+#         'complexity_score': round(complexity_score, 3)
+#     }
+
 
 def calculate_graph_metrics(dict_char):
     """
-    Вычисляет метрики графа на основе словаря характеристик.
-
-    Args:
-        dict_char: Словарь характеристик {характеристика: [список_следующих]}
-
-    Returns:
-        dict: Словарь с метриками:
-            - vertices: количество вершин (уникальных характеристик)
-            - edges: количество дуг (уникальные переходы)
-            - density: плотность графа (edges / vertices)
-            - complexity_score: оценка сложности (0.0 - 1.0)
+    Вычисляет метрики графа с логарифмической нормализацией.
+    Сложность перестаёт расти после:
+        - 100 вершин
+        - 200 дуг
     """
     if not dict_char:
         return {
@@ -23,48 +95,40 @@ def calculate_graph_metrics(dict_char):
             'complexity_score': 0.0
         }
 
-    # Количество вершин (уникальных характеристик)
     vertices = len(dict_char)
 
     # Количество дуг (уникальные переходы)
-    # Сначала проверим структуру данных
     unique_edges = set()
-
     for char, next_chars in dict_char.items():
-        # Преобразуем next_chars в список, если это не список
         if not isinstance(next_chars, list):
-            if next_chars:  # Если это не пустая строка или не None
-                next_chars = [next_chars]
-            else:
-                next_chars = []
-
-        # Используем множество для удаления дубликатов в списке следующих характеристик
-        unique_next_chars = set(next_chars)
-        for next_char in unique_next_chars:
-            if next_char:  # Игнорируем пустые значения
+            next_chars = [next_chars] if next_chars else []
+        for next_char in set(next_chars):
+            if next_char:
                 unique_edges.add((char, next_char))
-
     edges = len(unique_edges)
 
-    # Плотность графа (отношение дуг к вершинам)
-    # Для полного графа максимальная плотность = vertices * (vertices - 1)
+    # Плотность (как раньше)
     if vertices <= 1:
-        max_possible_edges = 0
         density = 0.0
     else:
         max_possible_edges = vertices * (vertices - 1)
         density = edges / max_possible_edges if max_possible_edges > 0 else 0.0
 
-    # Оценка сложности на основе метрик
-    # Нормализуем значения для получения оценки от 0.0 до 1.0
-    # Используем комбинацию количества вершин, дуг и плотности
-    vertices_score = min(vertices / 10.0, 1.0)  # Нормализуем до 10 вершин
-    edges_score = min(edges / 20.0, 1.0)  # Нормализуем до 20 дуг
-    density_score = density  # Уже нормализовано
+    # Логарифмическая нормализация
+    # Сложность растёт до 100 вершин и 200 дуг
+    V_THRESHOLD = 100
+    E_THRESHOLD = 200
 
-    # Взвешенная комбинация метрик
-    complexity_score = (vertices_score * 0.3 + edges_score * 0.4 + density_score * 0.3)
-    complexity_score = min(complexity_score, 1.0)  # Ограничиваем до 1.0
+    vertices_score = min(math.log(vertices + 1) / math.log(V_THRESHOLD), 1.0)
+    edges_score    = min(math.log(edges + 1)    / math.log(E_THRESHOLD), 1.0)
+    density_score  = density
+
+    # Взвешенная сложность
+    complexity_score = (vertices_score * 0.3 +
+                        edges_score    * 0.4 +
+                        density_score  * 0.3)
+
+    complexity_score = min(complexity_score, 1.0)
 
     return {
         'vertices': vertices,

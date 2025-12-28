@@ -559,7 +559,8 @@ class App:
 
             print("*" * 20)
 
-            transitions = build_dictionary.build_main_dict(dict_char, start_edges, finish_edges)
+            # transitions = build_dictionary.build_main_dict(dict_char, start_edges, finish_edges)
+            transitions = build_dictionary.build_main_dict(dict_char, start_edges, finish_edges, scripts)
             print(transitions)
 
             # Сохраняем граф переходов для последующей визуализации

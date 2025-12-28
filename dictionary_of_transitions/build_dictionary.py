@@ -1,4 +1,4 @@
-# Файл build_dictionary.py
+# dictionary_of_transitions/build_dictionary.py
 
 import dictionary_of_transitions.find_same_edges as find_same_edges
 import dictionary_of_transitions.find_duplicate as find_duplicate
@@ -6,156 +6,106 @@ import dictionary_of_transitions.replace as replace
 
 transitions = {}
 state_counter = -1
+scripts = []  # Будем получать извне
 
-# Функция для создания нового состояния
+
 def get_new_state_name():
     global state_counter
     state_counter += 1
-    state_name = f'S{state_counter}'
-    return state_name
+    return f'S{state_counter}'
 
-# Построение начального словаря
-def build_transitions(graph, start_edges, last_elements):
-    global state_counter
-    # Получаем начальное состояние
+
+def build_transitions(graph, start_edges, finish_edges, input_scripts):
+    global state_counter, scripts
+    scripts = input_scripts
+    state_counter = -1
     initial_state = get_new_state_name()
-    transitions[initial_state] = {}  # Создаем начальное состояние
-
-    # Создание завершающего состояния
+    transitions.clear()
+    transitions[initial_state] = {}
     final_state = 'Z'
     transitions[final_state] = {}
 
-    # Вспомогательная структура для отслеживания переходов
-    edge_to_state = {}
-    # Максимальная глубина рекурсии для предотвращения бесконечной рекурсии
-    MAX_RECURSION_DEPTH = 100
+    # Анализ: где каждая характеристика — последняя
+    char_is_last = set()
+    for seq in scripts:
+        if seq:
+            char_is_last.add(seq[-1])
 
-    # Начинаем обработку переходов
-    def process_edge(edge, current_state, visited_edges=None, depth=0):
-        if visited_edges is None:
-            visited_edges = set()
-        
-        # Защита от бесконечной рекурсии
-        if depth > MAX_RECURSION_DEPTH:
-            print(f"Достигнута максимальная глубина рекурсии для ребра '{edge}', создаем переход к финальному состоянию")
-            transitions[current_state][edge] = final_state
+    # Вспомогательная функция: может ли быть переход в Z
+    def can_end(edge, current_seq_position):
+        # Если edge — последняя в каком-то ТФ, и сейчас она в конце
+        return edge in char_is_last
+
+    def process_path(seq, index, current_state):
+        if index >= len(seq):
             return
-        
-        # Проверяем, не обрабатывается ли это ребро уже в текущем пути (цикл)
-        if edge in visited_edges:
-            # Это цикл - создаем самопетлю (переход из состояния в само себя)
-            # или переход к финальному состоянию, если это последний элемент
-            if edge in last_elements:
-                transitions[current_state][edge] = final_state
-            else:
-                # Создаем самопетлю - переход в то же состояние
-                transitions[current_state][edge] = current_state
-                print(f"Обнаружен цикл для ребра '{edge}', создана самопетля в состоянии '{current_state}'")
+
+        edge = seq[index]
+        next_state = None
+
+        # Если это последний элемент в этом пути
+        if index == len(seq) - 1:
+            transitions[current_state][edge] = 'Z'
             return
-        
-        # Добавляем текущее ребро в посещенные
-        visited_edges.add(edge)
-        
-        # Получаем все возможные переходы для данного ребра
-        next_states = graph.get(edge, [])
-        
-        # Если нет следующих состояний, создаем переход к финальному состоянию
-        if not next_states:
-            transitions[current_state][edge] = final_state
-            visited_edges.remove(edge)
-            return
-        
-        new_state = get_new_state_name()  # Получаем новое имя состояния
-        transitions[current_state][edge] = new_state  # Создаем переход в словаре
 
-        # Создаем новое состояние в transitions
-        transitions[new_state] = {}
+        # Следующий элемент
+        next_edge = seq[index + 1]
 
-        # Запоминаем, что это ребро ведет к новому состоянию
-        edge_to_state[edge] = new_state
-
-        # Рекурсивно обрабатываем следующие переходы
-        for next_edge in next_states:
-            if next_edge in last_elements:
-                transitions[new_state][next_edge] = final_state  # Переход к завершающему состоянию
-            else:
-                # Передаем копию visited_edges для каждого следующего ребра и увеличиваем глубину
-                process_edge(next_edge, new_state, visited_edges.copy(), depth + 1)
-        
-        # Удаляем текущее ребро из посещенных после обработки всех следующих
-        visited_edges.remove(edge)
-
-    # Сначала обрабатываем начальное состояние
-    for edge in start_edges:
-        process_edge(edge, initial_state)
-
-    # Теперь добавим переходы в завершенное состояние по last_elements
-    for edge in last_elements:
-        can_add_to_Z = True
-
-        # Проверяем все состояния для наличия перехода к Z
-        for state in transitions:
-            if state != final_state and edge in transitions[state]:
-                can_add_to_Z = False
+        # Ищем или создаём состояние для перехода
+        next_state_name = None
+        for next_state_key, next_target in transitions.get(current_state, {}).items():
+            if next_state_key == edge:
+                next_state_name = next_target
                 break
-        if can_add_to_Z:
-            transitions[final_state][edge] = ''  # Переход из Z в Z
 
-    stack = [transitions]
+        if not next_state_name:
+            next_state_name = get_new_state_name()
+            transitions[current_state][edge] = next_state_name
+            if next_state_name not in transitions:
+                transitions[next_state_name] = {}
 
-    while stack:
-        current_dict = stack.pop()
+        # Рекурсивно обрабатываем
+        process_path(seq, index + 1, next_state_name)
 
-        for key, value in current_dict.items():
-            if isinstance(value, dict):
-                stack.append(value)
-            elif value == '':
-                current_dict[key] = 'Z'  # Заменяем пустое значение на 'Z'
+    # Обрабатываем каждый сценарий
+    for seq in scripts:
+        if seq and seq[0] in start_edges:
+            process_path(seq, 0, initial_state)
+
+    # Убираем пустые ссылки
+    for state in transitions:
+        for edge, target in transitions[state].items():
+            if target == '':
+                transitions[state][edge] = 'Z'
 
     return transitions
 
-# Объединение вершин с одинаковыми вход и выход характеристиками
+
 def replace_pre_aft_duplicate(transitions):
-    # Замена состояний с одинаковыми вход и выход характеристиками
     duplicates = find_duplicate.main_find_duplicate(transitions)
     while duplicates:
+        new_state = get_new_state_name()
+        for duplicate in duplicates[0]:
+            transitions = replace.replace_name_state(transitions, duplicate, new_state)
         duplicates = find_duplicate.main_find_duplicate(transitions)
-        if duplicates:
-            new_state = get_new_state_name()
-            for duplicate in duplicates[0]:
-                # Переименуем состояние
-                transitions = replace.replace_name_state(transitions, duplicate, new_state)
     return transitions
 
-def delete_repeat_edges(transitions):
-    # Создаём новый словарь для хранения переходов без повторений
-    unique_transitions = {}
-    for state, edges in transitions.items():
-        # Используем множество для удаления повторяющихся ребер
-        # edges можно преобразовать в множество и затем обратно в список
-        unique_transitions[state] = list(set(edges))
-    return unique_transitions
 
-def build_main_dict(transitions, start_edges, last_elements):
-    # Удаляем дублирующиеся ребра (характеристики)
-    transitions = delete_repeat_edges(transitions)
-    print("Граф без повторений ", transitions)
-
-    # Построение стартового словаря переходов
-    transitions = build_transitions(transitions, start_edges, last_elements)
+def build_main_dict(graph, start_edges, finish_edges, input_scripts):
+    global transitions
+    transitions = build_transitions(graph, start_edges, finish_edges, input_scripts)
     print("Стартовый словарь\n", transitions)
 
-    # Ищем состояния с одинаковыми вход и выход характеристикам, объединяем их
+    # Удаляем дубли состояний
     transitions = replace_pre_aft_duplicate(transitions)
-    print("Словарь после замены дублирующихся\n", transitions)
+    print("После замены дубликатов\n", transitions)
 
-    # Найдём состояния с одинаковыми рёбрами для состояния 'S0'
+    # Группируем одинаковые переходы
     same_edges_groups = find_same_edges.same_edges(transitions)
-    # Объединим состояния
     for group in same_edges_groups:
         new_name = get_new_state_name()
         for state in group:
             replace.replace_name_state(transitions, state, new_name)
-    print("Словарь после замены сост с одинаковыми edges", transitions)
+    print("После объединения одинаковых edges", transitions)
 
     return transitions
