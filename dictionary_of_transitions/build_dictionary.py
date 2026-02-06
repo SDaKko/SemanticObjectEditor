@@ -96,16 +96,16 @@ def build_main_dict(graph, start_edges, finish_edges, input_scripts):
     transitions = build_transitions(graph, start_edges, finish_edges, input_scripts)
     print("Стартовый словарь\n", transitions)
 
-    # Удаляем дубли состояний
-    transitions = replace_pre_aft_duplicate(transitions)
-    print("После замены дубликатов\n", transitions)
-
-    # Группируем одинаковые переходы
-    same_edges_groups = find_same_edges.same_edges(transitions)
-    for group in same_edges_groups:
-        new_name = get_new_state_name()
-        for state in group:
-            replace.replace_name_state(transitions, state, new_name)
-    print("После объединения одинаковых edges", transitions)
+    # # Удаляем дубли состояний
+    # transitions = replace_pre_aft_duplicate(transitions)
+    # print("После замены дубликатов\n", transitions)
+    #
+    # # Группируем одинаковые переходы
+    # same_edges_groups = find_same_edges.same_edges(transitions)
+    # for group in same_edges_groups:
+    #     new_name = get_new_state_name()
+    #     for state in group:
+    #         replace.replace_name_state(transitions, state, new_name)
+    # print("После объединения одинаковых edges", transitions)
 
     return transitions

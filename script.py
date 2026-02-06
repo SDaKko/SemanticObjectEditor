@@ -3,6 +3,7 @@
 import re
 from typing import List, Tuple, Any
 
+# Извлечение последовательностей характеристик из текстов
 # Вычисление значения семантической близости
 def semantic_similarity(sentence1, sentence2):
     # Создаются множества для удаления повторяющихся элементов
@@ -25,29 +26,32 @@ def tokenize(text):
     return sentences
 
 # Вычисление сценария в каждом ТП
+from difflib import SequenceMatcher
+
+
+def similarity(a, b):
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
 def extract_scripts(text, character):
-    sentences = tokenize(text)
     sequence = []
-    # Порог для проверки является ли токен характеристикой
-    threshold = 0.7
-    max_sem_prox = threshold
-    # Для каждого предложения проверяем, встречается ли характеристика
-    for sentence in sentences:
-        curr_key = None
+    sentences = re.split(r'[.?!]', text)
+
+    for sent in sentences:
+        sent = sent.strip()
+        if not sent:
+            continue
+        best_key = None
+        best_score = 0.7
+
         for key, pattern in character.items():
-            curr_sem_prox = semantic_similarity(pattern, sentence)
+            score = similarity(sent, pattern)
+            if score > best_score:
+                best_score = score
+                best_key = key
 
-            # print(curr_sem_prox, " ", max_sem_prox)
-            if (curr_sem_prox >= max_sem_prox):
-                print('***', sentence, pattern)
-                max_sem_prox = curr_sem_prox
-                curr_key = key
-                # print(sentence, " ", pattern, " ", curr_sem_prox)
-
-        if curr_key is not None:
-            # print(curr_key)
-            sequence.append(curr_key)
-            max_sem_prox = threshold
+        if best_key:
+            sequence.append(best_key)
 
     return sequence
 
