@@ -9,8 +9,36 @@ from regex import *
 import data, json, sys, os, subprocess, time
 import dictionary_of_transitions.build_dictionary as build_dictionary
 import graph_metrics
-import graph  # Убедитесь, что у вас есть graph.py
+from tkinter import simpledialog
+import graph
 import re
+from dotenv import load_dotenv
+import os
+
+
+
+# Проверка наличия llm_generator.py
+# --- ПОДКЛЮЧЕНИЕ GIGACHAT ---
+LLM_AVAILABLE = False
+try:
+    from llm_generator import LLMGenerator
+
+    # 🔑 ВСТАВЬТЕ СЮДА СВОЙ API-ТОКЕН
+    load_dotenv()
+    GIGACHAT_TOKEN = os.getenv("GIGACHAT_TOKEN") # ← ЗАМЕНИТЬ НА СВОЙ
+
+    generator = LLMGenerator(gigachat_token=GIGACHAT_TOKEN)
+
+    # Проверка соединения
+    test_response = generator.generate("Привет", max_tokens=5)
+    if "Ошибка" not in test_response:
+        LLM_AVAILABLE = True
+        print("✅ GigaChat успешно подключена!")
+    else:
+        print("❌ Ошибка GigaChat:", test_response)
+except Exception as e:
+    print("❌ GigaChat не загружена:", e)
+
 
 # characteristics = {}
 # characteristics = {
@@ -314,7 +342,7 @@ characteristics = {
     "q100": "Следующая ступень: проведи весь день в полной тишине и темноте.",
     "q101": "Ты видишь узор? Все ведет к одному финалу.",
     "q102": "Завтра ты получишь последнюю инструкцию. Будь готов.",
-    "q103": "Ты слышишь голоса? Скруг услышишь только мой.",
+    "q103": "Ты слышишь голоса? Скоро услышишь только мой.",
     "q104": "Твое время истекло. Пора сделать выбор.",
     "q105": "Добро пожаловать в море свободы."
 
@@ -335,9 +363,23 @@ root.option_add("*tearOff", FALSE)
 
 frame_width = screen_width // 2
 
-# Создаем фрейм для отображения элементов для работы с характеристиками
-frame_results = Frame(root, width=50)  # bg = "purple",
-frame_results.grid(row=0, column=2, padx=5, pady=5)
+# --- ПРАВАЯ ПАНЕЛЬ С ПРОКРУТКОЙ ---
+results_canvas = Canvas(root, width=screen_width // 2 - 20)
+results_scrollbar = ttk.Scrollbar(root, orient="vertical", command=results_canvas.yview)
+
+frame_results = ttk.Frame(results_canvas)
+frame_results.bind("<Configure>", lambda e: results_canvas.configure(scrollregion=results_canvas.bbox("all")))
+results_canvas.create_window((0, 0), window=frame_results, anchor="nw")
+results_canvas.configure(yscrollcommand=results_scrollbar.set)
+
+# Размещаем на сетке
+results_canvas.grid(row=0, column=2, padx=5, pady=5, sticky="ns")
+results_scrollbar.grid(row=0, column=3, sticky="ns")
+
+# Разрешаем растягивание по вертикали
+root.grid_rowconfigure(0, weight=1)
+root.grid_columnconfigure(0, weight=1)
+
 
 # ------------------------------------------------------------------- FRAME TP -------------------------------------------------------------------
 
@@ -487,8 +529,86 @@ class App:
                                          variable=self.gradation_type, value="detailed")
         detailed_radio.grid(row=0, column=2, padx=5, pady=5)
 
+
+
+        # --- ГЕНЕРАЦИЯ ТЕКСТА С ПОМОЩЬЮ LLM ---
+        llm_frame = ttk.LabelFrame(frame_results, text="Генерация текста с помощью ИИ")
+        llm_frame.grid(row=8, column=0, padx=5, pady=10, sticky="ew")
+
+        # Выбор типа генерации
+        self.gen_type = tk.StringVar(value="style")
+
+        ttk.Radiobutton(llm_frame, text="По стилю", variable=self.gen_type, value="style").grid(row=0, column=0, padx=5,
+                                                                                                pady=2)
+        ttk.Radiobutton(llm_frame, text="По примеру", variable=self.gen_type, value="example").grid(row=0, column=1,
+                                                                                                    padx=5, pady=2)
+
+        # Поле ввода примера (видимо только при "по примеру")
+        self.example_text = tk.Text(llm_frame, width=60, height=3)
+        self.example_text.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
+        self.example_text.grid_remove()  # Скрыто по умолчанию
+
+        # Выбор длины
+        length_label = tk.Label(llm_frame, text="Длина:")
+        length_label.grid(row=2, column=0, padx=5, pady=2, sticky="w")
+
+        self.length_var = tk.StringVar(value="средний")
+        length_combo = ttk.Combobox(llm_frame, textvariable=self.length_var, values=["короткий", "средний", "длинный"],
+                                    state="readonly", width=10)
+        length_combo.grid(row=2, column=1, padx=5, pady=2)
+
+        # Кнопка генерации
+        self.generate_btn = ttk.Button(llm_frame, text="Сгенерировать текст", command=self.generate_llm_text)
+        self.generate_btn.grid(row=3, column=0, columnspan=3, pady=5)
+
+        # Привязка изменения типа к отображению поля
+        self.gen_type.trace("w", self.toggle_example_field)
+
     def confirm_action(self):
         return messagebox.askyesno("Подтверждение", "Вы уверены, что хотите сохранить характеристики?")
+
+    def toggle_example_field(self, *args):
+        if self.gen_type.get() == "example":
+            self.example_text.grid()
+        else:
+            self.example_text.grid_remove()
+
+    def generate_llm_text(self):
+        if not LLM_AVAILABLE:
+            messagebox.showerror("Ошибка", "Сервис LLM недоступен. Убедитесь, что Ollama запущена на localhost:11434.")
+            return
+
+        length = self.length_var.get()
+
+        try:
+            if self.gen_type.get() == "style":
+                style = simpledialog.askstring(
+                    "Выбор стиля",
+                    "Доступные стили:\n- манипулятивный\n- терапевтический\n- загадочный\n- провокационный\n\nВведите стиль:"
+                )
+                if not style:
+                    return
+                result = generator.generate_by_style(style, length)
+            else:  # example
+                example = self.example_text.get("1.0", tk.END).strip()
+                if not example:
+                    messagebox.showwarning("Предупреждение", "Введите пример текста.")
+                    return
+                result = generator.generate_by_example(example, length)
+
+            if "Ошибка" in result or "[Ошибка" in result:
+                messagebox.showerror("Ошибка генерации", result)
+                return
+
+            # Добавляем как новый ТФ
+            self.add_tp()
+            tp_name = f"ТФ {self.button_counter}"
+            self.text_area[tp_name].insert(tk.END, result)
+
+            messagebox.showinfo("Успех", "Текст успешно сгенерирован и добавлен!")
+
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сгенерировать текст: {e}")
 
     def save_changes(self):
         if self.confirm_action():
@@ -553,6 +673,8 @@ class App:
         new_text_area = tk.Text(self.text_frame, width=60, height=8)
         new_text_area.grid(row=0, column=0, pady=5)
         self.text_area[tp_name] = new_text_area
+
+        tps[tp_name] = new_text_area
 
         # Создание нового скроллбара
         new_scrollbar = ttk.Scrollbar(self.text_frame, orient="vertical", command=new_text_area.yview)
@@ -816,7 +938,7 @@ class App:
             if text_content:
                 script = script_module.extract_scripts(text_content, characteristics)
                 print(f"Последовательность хар-к {key}: ", script)
-                self.text_area[key].delete(1.0, tk.END)
+                # self.text_area[key].delete(1.0, tk.END)
                 self.text_reg[key].insert(tk.INSERT, " ".join(script))
                 self.scripts.append(script)  # ✅ Добавляем в self.scripts
             else:

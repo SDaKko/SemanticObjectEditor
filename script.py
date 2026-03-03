@@ -36,6 +36,7 @@ def similarity(a, b):
 def extract_scripts(text, character):
     sequence = []
     sentences = re.split(r'[.?!]', text)
+    print(sentences, "\n")
 
     for sent in sentences:
         sent = sent.strip()

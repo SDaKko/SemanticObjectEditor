@@ -82,19 +82,59 @@ def build_transitions(graph, start_edges, finish_edges, input_scripts):
 
 
 def replace_pre_aft_duplicate(transitions):
+    """Безопасное удаление дубликатов с защитой Z и конечных переходов"""
+    if not transitions:
+        return transitions
+
     duplicates = find_duplicate.main_find_duplicate(transitions)
-    while duplicates:
+    iteration = 0
+    max_iterations = 10  # Защита от бесконечного цикла
+
+    while duplicates and iteration < max_iterations:
+        iteration += 1
         new_state = get_new_state_name()
-        for duplicate in duplicates[0]:
-            transitions = replace.replace_name_state(transitions, duplicate, new_state)
+
+        # Берём только первую группу дубликатов
+        group = duplicates[0]
+
+        # Проверяем, ведёт ли КАКОЕ-ЛИБО состояние в группе к Z
+        leads_to_z = False
+        z_transitions = {}
+
+        for state in group:
+            if state in transitions:
+                for edge, target in transitions[state].items():
+                    if target == 'Z':
+                        leads_to_z = True
+                        z_transitions[edge] = 'Z'
+
+        # Заменяем состояния в группе
+        for state in list(group):  # Используем list() для копии
+            if state in transitions:
+                transitions = replace.replace_name_state(
+                    transitions, state, new_state, protected_states={'Z'}
+                )
+
+        # Восстанавливаем переходы к Z, если они были потеряны
+        if leads_to_z and new_state in transitions:
+            for edge, target in z_transitions.items():
+                transitions[new_state][edge] = 'Z'
+
+        # Ищем новые дубликаты
         duplicates = find_duplicate.main_find_duplicate(transitions)
+
     return transitions
+
+
 
 
 def build_main_dict(graph, start_edges, finish_edges, input_scripts):
     global transitions
     transitions = build_transitions(graph, start_edges, finish_edges, input_scripts)
     print("Стартовый словарь\n", transitions)
+
+
+
 
     # # Удаляем дубли состояний
     # transitions = replace_pre_aft_duplicate(transitions)
