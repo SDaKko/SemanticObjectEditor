@@ -1,25 +1,75 @@
 # llm_generator.py
+import uuid
+
 import requests
-import re
+import base64
+import os
+from dotenv import load_dotenv
 from typing import Literal
+
+# Загружаем переменные окружения
+load_dotenv()
 
 
 class LLMGenerator:
-    def __init__(self, gigachat_token: str):
+    def __init__(self):
         """
-        Инициализация с токеном GigaChat.
-        :param gigachat_token: ваш API-токен из личного кабинета Сбера
+        Инициализация без токена — он будет получен автоматически.
         """
-        self.gigachat_token = gigachat_token
+        self.token = None
+        self.client_id = os.getenv("GIGACHAT_CLIENT_ID")
+        self.client_secret = os.getenv("GIGACHAT_CLIENT_SECRET")
+
+        if not self.client_id or not self.client_secret:
+            raise ValueError("Не найдены GIGACHAT_CLIENT_ID или GIGACHAT_CLIENT_SECRET в .env")
+
+        self.get_token()  # Автоматически получаем токен при создании объекта
+
+    def get_token(self) -> bool:
+        url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+        auth_str = f"{self.client_id}:{self.client_secret}"
+        encoded_auth = base64.b64encode(auth_str.encode()).decode()
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+            "RqUID": str(uuid.uuid4()),  # ✅ ФИКС: генерируем уникальный UUID
+            "Authorization": f"Basic {encoded_auth}"
+        }
+
+        payload = {
+            "scope": "GIGACHAT_API_PERS"
+        }
+
+        try:
+            response = requests.post(
+                url,
+                headers=headers,
+                data=payload,
+                verify=False,
+                timeout=10
+            )
+            if response.status_code == 200:
+                result = response.json()
+                self.token = result.get("access_token")
+                print("✅ Токен успешно получен!")
+                return True
+            else:
+                print(f"[Ошибка получения токена] {response.status_code}: {response.text}")
+                return False
+        except Exception as e:
+            print(f"[Ошибка подключения]: {e}")
+            return False
 
     def generate(self, prompt: str, temperature=0.8, max_tokens=600) -> str:
         """
         Генерация текста через GigaChat API.
         """
-        url = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
+        url = "https://gigachat.devices.sberbank.ru:443/api/v1/chat/completions"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.gigachat_token}"
+            "Authorization": f"Bearer {self.token}",
+            "RqUID": str(uuid.uuid4())
         }
 
         payload = {

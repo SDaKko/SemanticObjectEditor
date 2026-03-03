@@ -20,14 +20,12 @@ import os
 # Проверка наличия llm_generator.py
 # --- ПОДКЛЮЧЕНИЕ GIGACHAT ---
 LLM_AVAILABLE = False
+generator = None
+
 try:
     from llm_generator import LLMGenerator
 
-    # 🔑 ВСТАВЬТЕ СЮДА СВОЙ API-ТОКЕН
-    load_dotenv()
-    GIGACHAT_TOKEN = os.getenv("GIGACHAT_TOKEN") # ← ЗАМЕНИТЬ НА СВОЙ
-
-    generator = LLMGenerator(gigachat_token=GIGACHAT_TOKEN)
+    generator = LLMGenerator()  # Автоматически получит токен
 
     # Проверка соединения
     test_response = generator.generate("Привет", max_tokens=5)
@@ -38,6 +36,7 @@ try:
         print("❌ Ошибка GigaChat:", test_response)
 except Exception as e:
     print("❌ GigaChat не загружена:", e)
+
 
 
 # characteristics = {}
