@@ -5,6 +5,7 @@ import requests
 import base64
 import os
 from dotenv import load_dotenv
+import time
 from typing import Literal
 
 # Загружаем переменные окружения
@@ -13,17 +14,30 @@ load_dotenv()
 
 class LLMGenerator:
     def __init__(self):
-        """
-        Инициализация без токена — он будет получен автоматически.
-        """
         self.token = None
+        self.token_expires_at = 0  # Время истечения токена
         self.client_id = os.getenv("GIGACHAT_CLIENT_ID")
         self.client_secret = os.getenv("GIGACHAT_CLIENT_SECRET")
 
         if not self.client_id or not self.client_secret:
             raise ValueError("Не найдены GIGACHAT_CLIENT_ID или GIGACHAT_CLIENT_SECRET в .env")
 
-        self.get_token()  # Автоматически получаем токен при создании объекта
+        self.get_token()  # Получаем токен при старте
+
+
+    def _is_token_expired(self) -> bool:
+        """Проверяет, истёк ли токен (с запасом 60 секунд)"""
+        return time.time() >= self.token_expires_at - 60
+
+    def _ensure_token(self) -> bool:
+        """Обновляет токен ТОЛЬКО если он отсутствует или почти истёк"""
+        if not self.token or self._is_token_expired():
+            print("🔄 Токен устарел или отсутствует. Запрашиваю новый...")
+            success = self.get_token()
+            if not success:
+                print("❌ Не удалось обновить токен.")
+            return success
+        return True
 
     def get_token(self) -> bool:
         url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
@@ -33,13 +47,11 @@ class LLMGenerator:
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept": "application/json",
-            "RqUID": str(uuid.uuid4()),  # ✅ ФИКС: генерируем уникальный UUID
+            "RqUID": str(uuid.uuid4()),  # ✅ Уникальный ID для каждого запроса
             "Authorization": f"Basic {encoded_auth}"
         }
 
-        payload = {
-            "scope": "GIGACHAT_API_PERS"
-        }
+        payload = {"scope": "GIGACHAT_API_PERS"}
 
         try:
             response = requests.post(
@@ -52,6 +64,7 @@ class LLMGenerator:
             if response.status_code == 200:
                 result = response.json()
                 self.token = result.get("access_token")
+                self.token_expires_at = time.time() + 1740  # 29 минут
                 print("✅ Токен успешно получен!")
                 return True
             else:
@@ -61,21 +74,23 @@ class LLMGenerator:
             print(f"[Ошибка подключения]: {e}")
             return False
 
+
     def generate(self, prompt: str, temperature=0.8, max_tokens=600) -> str:
-        """
-        Генерация текста через GigaChat API.
-        """
-        url = "https://gigachat.devices.sberbank.ru:443/api/v1/chat/completions"
+        """Генерация текста — с автоматическим обновлением токена"""
+        if not self._ensure_token():
+            return "[Ошибка] Не удалось получить токен."
+
+        url = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.token}",
-            "RqUID": str(uuid.uuid4())
+            "RqUID": str(uuid.uuid4())  # ✅ Каждый запрос — уникальный RqUID
         }
 
         payload = {
             "model": "GigaChat",
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": temperature,
+            "temperature": temperature,  # ✅ Высокая температура = больше креативности
             "max_tokens": max_tokens,
             "stream": False
         }
@@ -85,11 +100,13 @@ class LLMGenerator:
                 url,
                 json=payload,
                 headers=headers,
-                verify=False  # ⚠️ Только для теста!
+                verify=False,
+                timeout=15
             )
             if response.status_code == 200:
                 result = response.json()
-                return result["choices"][0]["message"]["content"].strip()
+                content = result["choices"][0]["message"]["content"].strip()
+                return content
             else:
                 return f"[Ошибка {response.status_code}]: {response.text}"
         except Exception as e:
@@ -128,7 +145,7 @@ class LLMGenerator:
 
         full_prompt = f"""
         {base_prompt}
-        
+
         Напиши диалоговый фрагмент длиной {length_hint}.
         Участвуют два человека: "Куратор" и "Игрок"
         Пиши перед репликами, от кого они (от "Куратора" или от "Игрока", после атора реплик ставь двоеточие)
@@ -139,9 +156,9 @@ class LLMGenerator:
         2. Используй формат коротких, обрывистых фраз, где мои реплики и ответы собеседника чередуются.
         3. Не используй кавычки, двоеточия и жирный шрифт. Предложения должны просто следовать друг за другом.
         4. Повествование должно идти от первого лица.
-        
+
         Запрещено писать незаконченные фразы.
-        
+
         Пример темпа: Привет, у тебя есть данные? Да, но это опасно. Я готов рискнуть.
         Тогда иди к заброшенному дому. Понял, уже выхожу.
 """
@@ -160,9 +177,9 @@ class LLMGenerator:
 
         full_prompt = f"""
         Ты — мастер генерации диалогов. Проанализируй стиль следующего диалога:
-    
+
         "{example_text.strip()}"
-    
+
         Напиши диалоговый фрагмент длиной {length_hint}.
         Участвуют два человека: "Куратор" и "Игрок"
         Пиши перед репликами, от кого они (от "Куратора" или от "Игрока", после атора реплик ставь двоеточие)
@@ -173,9 +190,9 @@ class LLMGenerator:
         2. Используй формат коротких, обрывистых фраз, где мои реплики и ответы собеседника чередуются.
         3. Не используй кавычки, двоеточия и жирный шрифт. Предложения должны просто следовать друг за другом.
         4. Повествование должно идти от первого лица.
-        
+
         Запрещено писать незаконченные фразы.
-    
+
         Пример темпа: Привет, у тебя есть данные? Да, но это опасно. Я готов рискнуть.
         Тогда иди к заброшенному дому. Понял, уже выхожу.
         Выведи только сам диалог.
