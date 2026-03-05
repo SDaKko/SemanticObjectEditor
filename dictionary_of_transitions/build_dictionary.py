@@ -25,60 +25,47 @@ def build_transitions(graph, start_edges, finish_edges, input_scripts):
     final_state = 'Z'
     transitions[final_state] = {}
 
-    # Анализ: где каждая характеристика — последняя
-    char_is_last = set()
-    for seq in scripts:
-        if seq:
-            char_is_last.add(seq[-1])
-
-    # Вспомогательная функция: может ли быть переход в Z
-    def can_end(edge, current_seq_position):
-        # Если edge — последняя в каком-то ТФ, и сейчас она в конце
-        return edge in char_is_last
+    char_is_last = set(seq[-1] for seq in scripts if seq)
 
     def process_path(seq, index, current_state):
         if index >= len(seq):
             return
-
         edge = seq[index]
-        next_state = None
+        is_last = (index == len(seq) - 1)
 
-        # Если это последний элемент в этом пути
-        if index == len(seq) - 1:
-            transitions[current_state][edge] = 'Z'
-            return
-
-        # Следующий элемент
-        next_edge = seq[index + 1]
-
-        # Ищем или создаём состояние для перехода
-        next_state_name = None
-        for next_state_key, next_target in transitions.get(current_state, {}).items():
-            if next_state_key == edge:
-                next_state_name = next_target
-                break
-
-        if not next_state_name:
-            next_state_name = get_new_state_name()
-            transitions[current_state][edge] = next_state_name
-            if next_state_name not in transitions:
+        if is_last:
+            if edge not in transitions[current_state]:
+                transitions[current_state][edge] = []
+            if 'Z' not in transitions[current_state][edge]:
+                transitions[current_state][edge].append('Z')
+        else:
+            next_edge = seq[index + 1]
+            if edge not in transitions[current_state]:
+                next_state_name = get_new_state_name()
+                transitions[current_state][edge] = [next_state_name]
                 transitions[next_state_name] = {}
+            else:
+                existing_targets = transitions[current_state][edge]
+                target_state = None
+                for t in existing_targets:
+                    if t != 'Z' and next_edge in transitions.get(t, {}):
+                        target_state = t
+                        break
+                if target_state is None:
+                    target_state = get_new_state_name()
+                    transitions[current_state][edge].append(target_state)
+                    transitions[target_state] = {}
+            # Рекурсивно обрабатываем следующий шаг
+            # Берём только что созданное состояние
+            next_state = transitions[current_state][edge][-1]
+            process_path(seq, index + 1, next_state)
 
-        # Рекурсивно обрабатываем
-        process_path(seq, index + 1, next_state_name)
-
-    # Обрабатываем каждый сценарий
-    for seq in scripts:
+    for seq in input_scripts:
         if seq and seq[0] in start_edges:
             process_path(seq, 0, initial_state)
 
-    # Убираем пустые ссылки
-    for state in transitions:
-        for edge, target in transitions[state].items():
-            if target == '':
-                transitions[state][edge] = 'Z'
-
     return transitions
+
 
 
 def replace_pre_aft_duplicate(transitions):

@@ -124,27 +124,88 @@ class DraggableGraph:
 
 def plot_state_graph(transitions, filename="state_graph.png"):
     G = nx.DiGraph()
-    edge_labels = {}
+    edge_labels = {}  # (source, target) -> label
 
     for state, edges in transitions.items():
-        for symbol, next_state in edges.items():
-            G.add_edge(state, next_state)
-            edge_labels[(state, next_state)] = symbol
+        for symbol, next_states in edges.items():
+            # Убедимся, что next_states — список
+            if isinstance(next_states, list):
+                targets = next_states
+            else:
+                targets = [next_states]
 
-    pos = nx.spring_layout(G, k=2.2, seed=42, iterations=100)
+            for target in targets:
+                G.add_edge(state, target)
 
-    fig, ax = plt.subplots(figsize=(14, 10))
+                # Собираем метки для каждого ребра (u, v)
+                key = (state, target)
+                if key in edge_labels:
+                    if symbol not in edge_labels[key]:
+                        edge_labels[key] += f"|{symbol}"
+                else:
+                    edge_labels[key] = symbol
+
+    # Раскладка
+    pos = nx.spring_layout(G, k=2.5, seed=42, iterations=100)
+
+    fig, ax = plt.subplots(figsize=(16, 10))
     plt.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.05)
 
-    # Создаём интерактивный граф
-    draggable = DraggableGraph(
-        G, pos, ax, edge_labels=edge_labels,
-        title="Граф состояний автомата",
-        node_size=1500, node_color="lightblue"
+    # Рёбра с чёткими стрелками
+    nx.draw_networkx_edges(
+        G, pos,
+        ax=ax,
+        edge_color="gray",
+        width=2.5,
+        arrows=True,
+        arrowstyle='-|>',
+        arrowsize=30,
+        connectionstyle='arc3,rad=0.1'
     )
 
-    plt.savefig(filename, dpi=200, bbox_inches='tight', pad_inches=0.5)
-    plt.show()  # Теперь интерактивно!
+    # Узлы — ВОЗВРАЩАЕМ СТАРЫЙ ЦВЕТ: lightblue
+    nx.draw_networkx_nodes(
+        G, pos,
+        ax=ax,
+        node_size=1800,
+        node_color="lightblue",       # ← Здесь был lightcoral — возвращаем lightblue
+        edgecolors="black",           # Чёрный контур
+        linewidths=1.5                # Как раньше
+    )
+
+    # Метки узлов
+    nx.draw_networkx_labels(
+        G, pos,
+        ax=ax,
+        font_size=14,
+        font_weight="bold"
+    )
+
+    # Метки рёбер
+    nx.draw_networkx_edge_labels(
+        G, pos, edge_labels,
+        ax=ax,
+        font_size=12,
+        font_color="darkred",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="none"),
+        rotate=False
+    )
+
+    ax.set_title("Граф состояний (NFA)", fontsize=18, fontweight="bold")
+    ax.axis("off")
+
+    # Сохраняем
+    plt.savefig(filename, dpi=200, bbox_inches='tight', pad_inches=0.3)
+
+    # Показываем с перетаскиванием
+    draggable = DraggableGraph(
+        G, pos, ax,
+        edge_labels=edge_labels,
+        title="Граф состояний (NFA)",
+        node_size=1800,
+        node_color="lightblue"  # ← Цвет и здесь должен быть одинаковым
+    )
+    plt.show()
     plt.close()
 
 

@@ -17,43 +17,41 @@ def build_regex(state, transitions_dict, visited=None, memo=None):
 
     visited.add(state)
     transitions = transitions_dict[state]
-
-    # Группировка по следующему состоянию
-    next_states = {}
-    for label, next_state in transitions.items():
-        if next_state not in next_states:
-            next_states[next_state] = []
-        next_states[next_state].append(label)
-
     sub_expressions = []
 
-    for next_state, labels in next_states.items():
-        unique_labels = list(set(labels))
-        label_expr = unique_labels[0] if len(unique_labels) == 1 else f"({'|'.join(unique_labels)})"
-
-        if next_state == 'Z':
-            sub_expressions.append(label_expr)
-        else:
-            sub_expr = build_regex(next_state, transitions_dict, visited.copy(), memo)
-            if sub_expr:
-                combined = f"{label_expr}{sub_expr}"
+    # Группируем по наборам следующих состояний
+    # Но лучше: для каждого ребра — все его цели
+    for label, next_states in transitions.items():
+        if not isinstance(next_states, list):
+            continue
+        target_exprs = []
+        for next_state in next_states:
+            if next_state == 'Z':
+                target_exprs.append("")
             else:
-                combined = label_expr
-            sub_expressions.append(combined)
+                rec = build_regex(next_state, transitions_dict, visited.copy(), memo)
+                target_exprs.append(rec if rec else "")
+        # Комбинируем пути через это ребро
+        if len(target_exprs) == 1:
+            combined = label + target_exprs[0] if target_exprs[0] else label
+        else:
+            inner = "|".join(f"{label}{expr}" if expr else label for expr in target_exprs)
+            combined = f"({inner})"
+        sub_expressions.append(combined)
 
     visited.remove(state)
 
-    if len(sub_expressions) == 0:
+    if not sub_expressions:
         result = ""
     elif len(sub_expressions) == 1:
         result = sub_expressions[0]
     else:
         result = f"({'|'.join(sub_expressions)})"
 
-    # Упрощение: (q1) → q1
     result = remove_extra_parentheses(result)
     memo[state] = result
     return result
+
 
 
 def remove_extra_parentheses(expr):
