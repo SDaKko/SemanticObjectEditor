@@ -574,7 +574,7 @@ class App:
 
     def generate_llm_text(self):
         if not LLM_AVAILABLE:
-            messagebox.showerror("Ошибка", "Сервис LLM недоступен. Убедитесь, что Ollama запущена на localhost:11434.")
+            messagebox.showerror("Ошибка", "Сервис LLM недоступен. Убедитесь, что получен токен доступа к GigaChat.")
             return
 
         length = self.length_var.get()
