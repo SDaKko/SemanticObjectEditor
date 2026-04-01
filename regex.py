@@ -29,29 +29,40 @@ def build_regex(state, transitions_dict, visited=None, memo=None):
 
         # Для каждого следующего состояния строим выражение
         next_exprs = []
+        has_empty = False
+
         for next_state in next_states:
             if next_state == 'Z':
                 next_exprs.append("")
+                has_empty = True
             else:
                 rec = build_regex(next_state, transitions_dict, visited.copy(), memo)
                 next_exprs.append(rec if rec else "")
 
+        # Фильтруем пустые выражения
+        non_empty = [expr for expr in next_exprs if expr != ""]
+
         # Формируем выражение для текущего ребра
-        if len(next_exprs) == 1:
-            if next_exprs[0]:
-                branch = f"{label}{next_exprs[0]}"
+        if has_empty and non_empty:
+            # Есть вариант закончить здесь и вариант продолжить
+            # Используем альтернативу с пустой строкой: label(продолжение|)
+            if len(non_empty) == 1:
+                # label(продолжение|)
+                branch = f"{label}({non_empty[0]}|)"
             else:
-                branch = label
-        else:
-            # Несколько вариантов после этого ребра
-            non_empty = [expr for expr in next_exprs if expr != ""]
-            if not non_empty:
-                branch = label
-            elif len(non_empty) == 1:
-                branch = f"{label}{non_empty[0]}"
-            else:
+                # label(продолжение1|продолжение2|)
                 inner = "|".join(non_empty)
-                branch = f"{label}({inner})"
+                branch = f"{label}({inner}|)"
+        elif has_empty and not non_empty:
+            # Только завершение - это просто label (пустая строка не нужна)
+            branch = label
+        elif not has_empty and len(non_empty) == 1:
+            # Один путь продолжения
+            branch = f"{label}{non_empty[0]}"
+        else:
+            # Несколько путей продолжения без завершения
+            inner = "|".join(non_empty)
+            branch = f"{label}({inner})"
 
         branches.append(branch)
 
@@ -80,7 +91,6 @@ def merge_branches_with_common_prefix(branches):
 
     if common_prefix:
         # Проверяем, что общий префикс - это целые токены qN
-        # Чтобы не разрывать q1 и q23 на q и 1|23
         if common_prefix.endswith('q'):
             # Если общий префикс заканчивается на 'q', то это не полный токен
             # Нужно найти общий префикс по полным токенам
@@ -126,7 +136,7 @@ def find_common_token_prefix(strings):
     # Разбиваем каждую строку на токены qN
     tokenized = []
     for s in strings:
-        tokens = re.findall(r'q\d+|[^q]', s)
+        tokens = re.findall(r'q\d+|\(|\)|\|', s)
         tokenized.append(tokens)
 
     # Ищем общий префикс из токенов
@@ -163,6 +173,31 @@ def find_common_prefix(strings):
             break
 
     return prefix
+
+
+def simplify_expression(expr):
+    """Упрощает регулярное выражение"""
+    if not expr:
+        return expr
+
+    # Удаляем пустые альтернативы в конце: (A|) -> (A|)
+    # Это нормально, оставляем как есть
+
+    # Удаляем лишние скобки вокруг одиночных токенов
+    expr = re.sub(r'\(q\d+\)', r'q\1', expr)
+
+    # Упрощаем (A|) когда A - простой токен
+    expr = re.sub(r'\(q\d+\|\)', r'q\d+?', expr)
+
+    # Удаляем (A) когда A не содержит |
+    while expr.startswith("(") and expr.endswith(")"):
+        inner = expr[1:-1]
+        if '|' not in inner:
+            expr = inner
+        else:
+            break
+
+    return expr
 
 
 def extract_common_prefix(expr):
@@ -230,7 +265,6 @@ def remove_extra_parentheses(expr):
         # Удаляем (A|B) если это единственная альтернатива
         if expr.startswith("(") and expr.endswith(")") and "|" in expr:
             inner = expr[1:-1]
-            # Проверяем, что скобки сбалансированы
             if inner.count("(") == inner.count(")"):
                 expr = inner
                 changed = True
@@ -244,7 +278,6 @@ def simplify_final(expr):
     while expr.startswith("(") and expr.endswith(")"):
         inner = expr[1:-1]
         if "|" in inner:
-            # Проверяем, не являются ли скобки необходимыми
             if inner.count("(") == inner.count(")"):
                 expr = inner
             else:
