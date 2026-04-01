@@ -1,6 +1,7 @@
 # regex.py
 import re
 
+
 def build_regex(state, transitions_dict, visited=None, memo=None):
     if visited is None:
         visited = set()
@@ -18,141 +19,250 @@ def build_regex(state, transitions_dict, visited=None, memo=None):
 
     visited.add(state)
     transitions = transitions_dict[state]
-    sub_expressions = []
+
+    # Для каждого исходящего ребра собираем варианты
+    branches = []
 
     for label, next_states in transitions.items():
         if not isinstance(next_states, list):
             continue
 
-        target_exprs = []
+        # Для каждого следующего состояния строим выражение
+        next_exprs = []
         for next_state in next_states:
             if next_state == 'Z':
-                target_exprs.append("")
+                next_exprs.append("")
             else:
                 rec = build_regex(next_state, transitions_dict, visited.copy(), memo)
-                target_exprs.append(rec if rec else "")
+                next_exprs.append(rec if rec else "")
 
-        # Формируем ветви: label + expr
-        branches = [f"{label}{expr}" if expr else label for expr in target_exprs]
-
-        # Выносим общий префикс до объединения
-        inner_expr = extract_common_prefix("|".join(branches))
-
-        # Оборачиваем в () только при необходимости
-        if "|" in inner_expr:
-            if inner_expr.startswith("(") and inner_expr.endswith(")") and is_balanced_and_single_group(inner_expr):
-                combined = inner_expr
+        # Формируем выражение для текущего ребра
+        if len(next_exprs) == 1:
+            if next_exprs[0]:
+                branch = f"{label}{next_exprs[0]}"
             else:
-                combined = f"({inner_expr})"
+                branch = label
         else:
-            combined = inner_expr
+            # Несколько вариантов после этого ребра
+            non_empty = [expr for expr in next_exprs if expr != ""]
+            if not non_empty:
+                branch = label
+            elif len(non_empty) == 1:
+                branch = f"{label}{non_empty[0]}"
+            else:
+                inner = "|".join(non_empty)
+                branch = f"{label}({inner})"
 
-        sub_expressions.append(combined)
+        branches.append(branch)
 
     visited.remove(state)
 
-    # Собираем основное выражение
-    if not sub_expressions:
+    # Объединяем все ветви
+    if not branches:
         result = ""
-    elif len(sub_expressions) == 1:
-        result = sub_expressions[0]
+    elif len(branches) == 1:
+        result = branches[0]
     else:
-        result = f"({'|'.join(sub_expressions)})"
-
-    # Удаляем лишние скобки
-    result = remove_extra_parentheses(result)
-
-    # Финальная оптимизация: удаляем (A), если A — один блок без |
-    result = simplify_final(result)
+        # Объединяем все ветви через | с поиском общего префикса
+        result = merge_branches_with_common_prefix(branches)
 
     memo[state] = result
     return result
 
 
-def extract_common_prefix(expr):
-    import re
+def merge_branches_with_common_prefix(branches):
+    """Объединяет ветви с общим префиксом для более компактного выражения"""
+    if len(branches) <= 1:
+        return branches[0] if branches else ""
 
-    def unparen(s):
-        while s.startswith("(") and s.endswith(")"):
-            inner = s[1:-1]
-            if inner.count("(") == inner.count(")") and inner.count(")") > 0:
-                break
-            s = inner
-        return s
+    # Ищем общий префикс
+    common_prefix = find_common_prefix(branches)
 
-    expr = unparen(expr)
-    parts = expr.split("|")
-    if len(parts) <= 1:
-        return expr
+    if common_prefix:
+        # Проверяем, что общий префикс - это целые токены qN
+        # Чтобы не разрывать q1 и q23 на q и 1|23
+        if common_prefix.endswith('q'):
+            # Если общий префикс заканчивается на 'q', то это не полный токен
+            # Нужно найти общий префикс по полным токенам
+            common_prefix = find_common_token_prefix(branches)
 
-    tokens_list = [re.findall(r'q\d+', part) for part in parts]
-    min_len = min(len(t) for t in tokens_list) if tokens_list else 0
-    common = []
+        if common_prefix:
+            # Разделяем ветви на префикс и суффиксы
+            suffixes = []
+            for branch in branches:
+                if branch.startswith(common_prefix):
+                    suffix = branch[len(common_prefix):]
+                    suffixes.append(suffix if suffix else "")
+                else:
+                    suffixes.append(branch)
+
+            # Если все ветви имеют общий префикс
+            if all(b.startswith(common_prefix) for b in branches):
+                # Рекурсивно объединяем суффиксы
+                suffixes_merged = merge_branches_with_common_prefix(suffixes)
+                if suffixes_merged and "|" in suffixes_merged:
+                    return f"{common_prefix}({suffixes_merged})"
+                else:
+                    return f"{common_prefix}{suffixes_merged}"
+
+    # Если нет общего префикса, объединяем через |
+    if len(branches) > 1:
+        # Проверяем, не являются ли все ветви простыми токенами
+        all_simple = all(re.match(r'^q\d+$', b) for b in branches)
+        if all_simple:
+            return f"({'|'.join(branches)})"
+
+        # Для сложных ветвей
+        return f"({'|'.join(branches)})"
+
+    return branches[0]
+
+
+def find_common_token_prefix(strings):
+    """Находит общий префикс по полным токенам qN"""
+    if not strings:
+        return ""
+
+    # Разбиваем каждую строку на токены qN
+    tokenized = []
+    for s in strings:
+        tokens = re.findall(r'q\d+|[^q]', s)
+        tokenized.append(tokens)
+
+    # Ищем общий префикс из токенов
+    common_tokens = []
+    min_len = min(len(t) for t in tokenized)
+
     for i in range(min_len):
-        if all(tokens[i] == tokens_list[0][i] for tokens in tokens_list):
-            common.append(tokens_list[0][i])
+        if all(t[i] == tokenized[0][i] for t in tokenized):
+            common_tokens.append(tokenized[0][i])
         else:
             break
 
-    if len(common) == 0:
-        return f"({'|'.join(parts)})"
+    if common_tokens:
+        return ''.join(common_tokens)
 
-    suffixes = []
-    for tokens in tokens_list:
-        suffix_tokens = tokens[len(common):]
-        suffix = "".join(suffix_tokens)
-        suffixes.append(suffix if suffix else "")
+    return ""
 
-    prefix_str = "".join(common)
-    if len(set(suffixes)) == 1:
-        return prefix_str + suffixes[0]
-    else:
-        inner = "|".join(suffixes)
-        if len(suffixes) > 1:
-            inner = f"({inner})"
-        return prefix_str + inner
+
+def find_common_prefix(strings):
+    """Находит общий префикс для всех строк"""
+    if not strings:
+        return ""
+
+    # Находим наименьшую строку для ограничения
+    min_len = min(len(s) for s in strings)
+
+    # Ищем общий префикс
+    prefix = ""
+    for i in range(min_len):
+        char = strings[0][i]
+        if all(s[i] == char for s in strings):
+            prefix += char
+        else:
+            break
+
+    return prefix
+
+
+def extract_common_prefix(expr):
+    """Извлекает общий префикс из выражения с альтернативами"""
+    if not expr or '|' not in expr:
+        return expr
+
+    # Убираем внешние скобки
+    while expr.startswith("(") and expr.endswith(")"):
+        inner = expr[1:-1]
+        if inner.count("(") == inner.count(")") and inner.count(")") > 0:
+            break
+        expr = inner
+
+    parts = expr.split("|")
+
+    # Ищем общий префикс
+    common_prefix = find_common_prefix(parts)
+
+    if common_prefix:
+        suffixes = [p[len(common_prefix):] for p in parts]
+        # Убираем пустые суффиксы для более компактного вида
+        suffixes = [s if s else "" for s in suffixes]
+
+        if all(s == "" for s in suffixes):
+            return common_prefix
+
+        if len(set(suffixes)) == 1 and suffixes[0]:
+            return common_prefix + suffixes[0]
+
+        # Рекурсивно обрабатываем суффиксы
+        inner = merge_branches_with_common_prefix(suffixes)
+        if inner and "|" in inner:
+            return f"{common_prefix}({inner})"
+        else:
+            return f"{common_prefix}{inner}"
+
+    # Если нет общего префикса, возвращаем как есть
+    if len(parts) == 1:
+        return parts[0]
+    return f"({expr})" if expr.startswith("(") else f"({expr})"
 
 
 def remove_extra_parentheses(expr):
+    """Удаляет лишние скобки из выражения"""
     changed = True
     while changed:
         changed = False
+
         # Удаляем (qN) → qN
-        new_expr = re.sub(r'\((q\d+)\)', r'\1', expr)
+        new_expr = re.sub(r'\(q\d+\)', r'\1', expr)
         if new_expr != expr:
             changed = True
             expr = new_expr
             continue
 
         # Удаляем (A) → A, если A не содержит | на верхнем уровне
-        new_expr = remove_single_wrappers(expr)
-        if new_expr != expr:
-            changed = True
-            expr = new_expr
+        if expr.startswith("(") and expr.endswith(")"):
+            inner = expr[1:-1]
+            if '|' not in inner or (inner.count("(") == inner.count(")") and inner.count("(") == 0):
+                expr = inner
+                changed = True
+                continue
+
+        # Удаляем (A|B) если это единственная альтернатива
+        if expr.startswith("(") and expr.endswith(")") and "|" in expr:
+            inner = expr[1:-1]
+            # Проверяем, что скобки сбалансированы
+            if inner.count("(") == inner.count(")"):
+                expr = inner
+                changed = True
 
     return expr
 
 
-def remove_single_wrappers(s):
-    if len(s) < 3 or not s.startswith("(") or not s.endswith(")"):
-        return s
-
-    depth = 0
-    for i, char in enumerate(s):
-        if char == '(':
-            depth += 1
-        elif char == ')':
-            depth -= 1
-            if depth == 0:
-                if i == len(s) - 1:
-                    inner = s[1:-1]
-                    if '|' not in get_top_level_parts(inner):
-                        return inner
+def simplify_final(expr):
+    """Финальная очистка выражения"""
+    # Удаляем лишние скобки вокруг одиночных блоков
+    while expr.startswith("(") and expr.endswith(")"):
+        inner = expr[1:-1]
+        if "|" in inner:
+            # Проверяем, не являются ли скобки необходимыми
+            if inner.count("(") == inner.count(")"):
+                expr = inner
+            else:
                 break
-    return s
+        else:
+            expr = inner
+
+    # Упрощаем (A|B) в A|B
+    if expr.startswith("(") and expr.endswith(")") and "|" in expr:
+        inner = expr[1:-1]
+        if inner.count("(") == inner.count(")"):
+            expr = inner
+
+    return expr
 
 
 def is_balanced_and_single_group(s):
+    """Проверяет, является ли строка одной сбалансированной группой скобок"""
     if not s.startswith("(") or not s.endswith(")"):
         return False
     depth = 0
@@ -167,6 +277,7 @@ def is_balanced_and_single_group(s):
 
 
 def get_top_level_parts(expr):
+    """Разбивает выражение на части верхнего уровня по |"""
     parts = []
     current = ""
     depth = 0
@@ -182,41 +293,3 @@ def get_top_level_parts(expr):
             current += char
     parts.append(current)
     return parts
-
-
-def simplify_final(expr):
-    """
-    Финальная очистка: удаляет лишние скобки вокруг одиночных блоков.
-    Например: (q1(q2|q3)) → q1(q2|q3), если это часть альтернативы.
-    """
-    if not expr or '|' not in expr:
-        return expr
-
-    # Разбиваем на части по |, но сохраняем структуру
-    parts = get_top_level_parts(expr)
-    simplified_parts = []
-
-    for part in parts:
-        # Если часть — это (A), и A не содержит |, то убираем скобки
-        if (
-            part.startswith("(") and
-            part.endswith(")") and
-            is_balanced_and_single_group(part)
-        ):
-            inner = part[1:-1]
-            if '|' not in get_top_level_parts(inner):
-                simplified_parts.append(inner)
-            else:
-                simplified_parts.append(part)
-        else:
-            simplified_parts.append(part)
-
-    # Если после упрощения остался один элемент — возвращаем его без скобок
-    if len(simplified_parts) == 1:
-        return simplified_parts[0]
-
-    # Иначе объединяем с |
-    result = "|".join(simplified_parts)
-
-    # Если результат — это (A|B|C), и он единственный, оставляем как есть
-    return result
