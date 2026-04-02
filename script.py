@@ -2,6 +2,8 @@
 
 import re
 from typing import List, Tuple, Any
+# Вычисление сценария в каждом ТП
+from difflib import SequenceMatcher
 
 # Извлечение последовательностей характеристик из текстов
 # Вычисление значения семантической близости
@@ -20,13 +22,10 @@ def semantic_similarity(sentence1, sentence2):
     return sem_prox
 
 # Токенизация по предложениям
-def tokenize(text):
-    sentences = re.split(r'[.?!]', text)
-    sentences = [s.strip() for s in sentences if s.strip()]
-    return sentences
-
-# Вычисление сценария в каждом ТП
-from difflib import SequenceMatcher
+# def tokenize(text):
+#     sentences = re.split(r'[.?!]', text)
+#     sentences = [s.strip() for s in sentences if s.strip()]
+#     return sentences
 
 
 def similarity(a, b):
