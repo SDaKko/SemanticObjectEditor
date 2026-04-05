@@ -104,7 +104,7 @@ def build_regex(state, transitions_dict, visited=None, memo=None, depth=0):
     print(f"{indent}Результат для {state}: {result}")
 
     # Временно отключаем simplify_expression для отладки
-    # result = simplify_expression(result)
+    result = simplify_expression(result)
 
     memo[state] = result
     return result
@@ -141,6 +141,7 @@ def merge_branches(branches):
     common_prefix = find_common_prefix(branches)
 
     if common_prefix and len(common_prefix) > 0:
+        # Проверка, что префикс не разрывает токен qN
         if common_prefix[-1] == 'q':
             common_prefix = find_common_token_prefix(branches)
 
@@ -165,6 +166,7 @@ def merge_branches(branches):
                 else:
                     return common_prefix
 
+    # Если нет общего префикса, объединяем через |
     unique_branches = list(dict.fromkeys(branches))
     if len(unique_branches) == 1:
         return unique_branches[0]
@@ -230,12 +232,10 @@ def simplify_expression(expr):
     # (qN) -> qN
     expr = re.sub(r'\(q(\d+)\)', r'q\1', expr)
 
-    # Удаляем пустые альтернативы
-    expr = re.sub(r'\(\|', '(', expr)
-    expr = re.sub(r'\|\)', ')', expr)
-
+    # Удаляем пустые группы ()
     expr = re.sub(r'\(\)', '', expr)
 
+    # Удаляем двойные скобки
     changed = True
     while changed:
         changed = False
@@ -244,14 +244,8 @@ def simplify_expression(expr):
             expr = new_expr
             changed = True
 
+    # Удаляем внешние скобки, если всё выражение в них
     if expr.startswith('(') and expr.endswith(')'):
-        inner = expr[1:-1]
-        if '(' not in inner and ')' not in inner and '|' in inner:
-            expr = inner
-
-    if expr.startswith('(') and expr.endswith(')'):
-        inner = expr[1:-1]
-        if '|' not in inner and '(' not in inner and ')' not in inner:
-            expr = inner
+        expr = expr[1:-1]
 
     return expr
