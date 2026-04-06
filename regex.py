@@ -103,7 +103,6 @@ def build_regex(state, transitions_dict, visited=None, memo=None, depth=0):
 
     print(f"{indent}Результат для {state}: {result}")
 
-    # Временно отключаем simplify_expression для отладки
     result = simplify_expression(result)
 
     memo[state] = result

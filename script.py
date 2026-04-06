@@ -1,59 +1,88 @@
 # Файл script.py
-
 import re
 from typing import List, Tuple, Any
-# Вычисление сценария в каждом ТП
-from difflib import SequenceMatcher
 
-# Извлечение последовательностей характеристик из текстов
+
 # Вычисление значения семантической близости
 def semantic_similarity(sentence1, sentence2):
-    # Создаются множества для удаления повторяющихся элементов
-    tokens1 = set(sentence1)
-    tokens2 = set(sentence2)
+    # Очищаем от знаков препинания и приводим к нижнему регистру
+    import string
+    translator = str.maketrans('', '', string.punctuation)
 
-    # Вычисляется пересечение множеств
+    clean_s1 = sentence1.lower().translate(translator)
+    clean_s2 = sentence2.lower().translate(translator)
+
+    # Разбиваем на слова
+    tokens1 = set(clean_s1.split())
+    tokens2 = set(clean_s2.split())
+
+    # Если оба множества пустые
+    if len(tokens1) == 0 and len(tokens2) == 0:
+        return 1.0
+    if len(tokens1) == 0 or len(tokens2) == 0:
+        return 0.0
+
+    # Вычисляем пересечение и объединение
     intersection = tokens1.intersection(tokens2)
-    # Вычисляется объединение множеств
     union = tokens1.union(tokens2)
 
     sem_prox = round((len(intersection) / len(union)), 2)
-    # Вычисляется семантическая близость
     return sem_prox
 
-# Токенизация по предложениям
-# def tokenize(text):
-#     sentences = re.split(r'[.?!]', text)
-#     sentences = [s.strip() for s in sentences if s.strip()]
-#     return sentences
+
+# Улучшенная токенизация - сохраняем предложения целиком
+def tokenize(text):
+    # Разбиваем по .?! но НЕ удаляем знаки внутри предложения
+    sentences = re.split(r'[.!?]+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    return sentences
 
 
-def similarity(a, b):
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+# Альтернативная токенизация - сохраняем знаки препинания
+def tokenize_advanced(text):
+    # Находим границы предложений, но не разрываем их
+    sentence_endings = re.compile(r'(?<=[.!?])\s+(?=[A-ZА-Я])')
+    sentences = sentence_endings.split(text)
+    return [s.strip() for s in sentences if s.strip()]
 
 
-def extract_scripts(text, character):
+# Вычисление сценария с улучшенным сравнением
+def extract_scripts(text, character, threshold=0.6):
+    sentences = tokenize(text)
     sequence = []
-    sentences = re.split(r'[.?!]', text)
-    print(sentences, "\n")
 
-    for sent in sentences:
-        sent = sent.strip()
-        if not sent:
-            continue
+    print(f"Разбито на предложения: {sentences}")
+    print(f"Порог схожести: {threshold}\n")
+
+    # Для каждого предложения проверяем, встречается ли характеристика
+    for sentence in sentences:
+
+        best_match = None
+        best_score = 0
         best_key = None
-        best_score = 0.7
 
         for key, pattern in character.items():
-            score = similarity(sent, pattern)
-            if score > best_score:
-                best_score = score
-                best_key = key
+            # Сравниваем текущее предложение с паттерном
+            curr_sem_prox = semantic_similarity(pattern, sentence)
 
-        if best_key:
+            print(f"Сравнение: '{sentence[:50]}...' с '{pattern[:50]}...' -> {curr_sem_prox}")
+
+            if curr_sem_prox > best_score:
+                best_score = curr_sem_prox
+                best_key = key
+                best_match = pattern
+
+        # Если лучшая схожесть превышает порог
+        if best_score >= threshold:
+            print(f'*** СОВПАДЕНИЕ *** Предложение: "{sentence}"')
+            print(f'  Подходит под: "{best_match}" с оценкой {best_score}')
             sequence.append(best_key)
+        else:
+            print(f'Нет совпадений для: "{sentence}" (лучшая оценка: {best_score})')
+        print()
 
     return sequence
+
 
 # Построение словаря характеристик из сценариев
 def build_dict_char(scripts):
@@ -74,14 +103,16 @@ def build_dict_char(scripts):
 
     return sequences
 
-# Поиск списка последних элементов из каждого списка
+
+# Поиск списка первых элементов из каждого списка
 def get_start_elements(input_tuple: Tuple[List[Any], ...]) -> List[Any]:
     start_elements = []
     for lst in input_tuple:
         if lst:  # Проверяем, не пустой ли список
             if lst[0] not in start_elements:
-                start_elements.append(lst[0])  # Добавляем последний элемент в результат
+                start_elements.append(lst[0])  # Добавляем первый элемент в результат
     return start_elements
+
 
 # Поиск списка последних элементов из каждого списка
 def get_finish_elements(input_tuple: Tuple[List[Any], ...]) -> List[Any]:
