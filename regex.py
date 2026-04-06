@@ -1,33 +1,38 @@
-# regex.py — с отладкой
+# regex.py — упрощённая версия (без оптимизации внутри)
 
 import re
-from graph import optimize_state_graph
+
+
+# Удаляем: from graph import optimize_state_graph
 
 
 def build_regex(state, transitions_dict, visited=None, memo=None, depth=0):
     """
-    Строит регулярное выражение из графа состояний
-    """
-    # Оптимизируем граф всегда
-    transitions_dict = optimize_state_graph(transitions_dict)
+    Строит регулярное выражение из графа состояний.
 
-    # Находим новое начальное состояние
-    if state not in transitions_dict:
-        state = find_equivalent_state(state, transitions_dict)
+    ВНИМАНИЕ: transitions_dict должен быть УЖЕ ОПТИМИЗИРОВАН!
+    """
+    # Удалено: transitions_dict = optimize_state_graph(transitions_dict)
+    # Удалено: find_equivalent_state() — состояния уже корректны
 
     if visited is None:
         visited = set()
     if memo is None:
         memo = {}
 
-    if state not in transitions_dict or not transitions_dict[state]:
+    # Проверка существования состояния
+    if state not in transitions_dict:
+        print(f"Предупреждение: состояние '{state}' не найдено в графе")
+        return ""
+
+    if not transitions_dict[state]:
         return ""
 
     if state in memo:
         return memo[state]
 
     if state in visited:
-        return ""
+        return ""  # Защита от циклов
 
     visited.add(state)
     transitions = transitions_dict[state]
@@ -42,8 +47,8 @@ def build_regex(state, transitions_dict, visited=None, memo=None, depth=0):
             next_states = [next_states]
 
         # Разделяем на завершающие и продолжающие переходы
-        final_transitions = []  # переходы в Z (завершение)
-        continue_transitions = []  # переходы в другие состояния
+        final_transitions = []
+        continue_transitions = []
 
         for next_state in next_states:
             if next_state == 'Z':
@@ -65,7 +70,6 @@ def build_regex(state, transitions_dict, visited=None, memo=None, depth=0):
 
         # Формируем выражение
         if has_final and has_continue:
-            # Есть и завершение, и продолжение
             unique_continues = list(dict.fromkeys([c for c in continue_transitions if c]))
             print(f"{indent}  unique_continues={unique_continues}")
             if len(unique_continues) == 1:
@@ -109,61 +113,38 @@ def build_regex(state, transitions_dict, visited=None, memo=None, depth=0):
     return result
 
 
-def find_equivalent_state(old_state, optimized_transitions):
-    """Находит эквивалентное состояние в оптимизированном графе"""
-    if old_state in optimized_transitions:
-        return old_state
-
-    for state, edges in optimized_transitions.items():
-        for edge, targets in edges.items():
-            if isinstance(targets, list):
-                if old_state in targets:
-                    return state
-            elif targets == old_state:
-                return state
-
-    if optimized_transitions:
-        for s in optimized_transitions.keys():
-            if s != 'Z':
-                return s
-        return next(iter(optimized_transitions.keys()))
-
-    return old_state
-
+# Функции merge_branches, find_common_token_prefix, find_common_prefix,
+# simplify_expression остаются без изменений
+# (они не зависят от оптимизации)
 
 def merge_branches(branches):
     """Объединяет ветви с общим префиксом"""
     if len(branches) <= 1:
         return branches[0] if branches else ""
 
-    # Ищем общий префикс
+    # Ищем общий префикс на уровне токенов
     common_prefix = find_common_prefix(branches)
 
-    if common_prefix and len(common_prefix) > 0:
-        # Проверка, что префикс не разрывает токен qN
-        if common_prefix[-1] == 'q':
-            common_prefix = find_common_token_prefix(branches)
+    if common_prefix:
+        suffixes = []
+        all_have_prefix = True
 
-        if common_prefix:
-            suffixes = []
-            all_have_prefix = True
+        for branch in branches:
+            if branch.startswith(common_prefix):
+                suffix = branch[len(common_prefix):]
+                suffixes.append(suffix if suffix else "")
+            else:
+                all_have_prefix = False
+                suffixes.append(branch)
 
-            for branch in branches:
-                if branch.startswith(common_prefix):
-                    suffix = branch[len(common_prefix):]
-                    suffixes.append(suffix if suffix else "")
-                else:
-                    all_have_prefix = False
-                    suffixes.append(branch)
-
-            if all_have_prefix:
-                suffixes_merged = merge_branches(suffixes)
-                if suffixes_merged and "|" in suffixes_merged:
-                    return f"{common_prefix}({suffixes_merged})"
-                elif suffixes_merged:
-                    return f"{common_prefix}{suffixes_merged}"
-                else:
-                    return common_prefix
+        if all_have_prefix:
+            suffixes_merged = merge_branches(suffixes)
+            if suffixes_merged and "|" in suffixes_merged:
+                return f"{common_prefix}({suffixes_merged})"
+            elif suffixes_merged:
+                return f"{common_prefix}{suffixes_merged}"
+            else:
+                return common_prefix
 
     # Если нет общего префикса, объединяем через |
     unique_branches = list(dict.fromkeys(branches))
@@ -177,50 +158,51 @@ def merge_branches(branches):
     return f"({'|'.join(unique_branches)})"
 
 
-def find_common_token_prefix(strings):
-    """Находит общий префикс по полным токенам qN"""
+def find_common_prefix(strings):
+    """
+    Находит общий префикс для всех строк на уровне токенов.
+
+    Args:
+        strings: Список строк (регулярных выражений)
+
+    Returns:
+        Общий префикс как строку, или "" если нет общего префикса
+
+    Примеры:
+         find_common_prefix(["q1q2", "q1q3"])
+        "q1"
+
+        find_common_prefix(["q10q2", "q11q2"])
+        ""
+
+        find_common_prefix(["q1(q2|q3)", "q1(q2|q4)"])
+        "q1(q2|"
+    """
     if not strings:
         return ""
 
+    if len(strings) == 1:
+        return strings[0]
+
+    # Разбиваем каждую строку на токены
     tokenized = []
     for s in strings:
         tokens = re.findall(r'q\d+|\(|\)|\|', s)
         tokenized.append(tokens)
 
-    if not tokenized:
-        return ""
-
+    # Ищем общий префикс среди токенов
     common_tokens = []
     min_len = min(len(t) for t in tokenized)
 
     for i in range(min_len):
-        if all(t[i] == tokenized[0][i] for t in tokenized):
-            common_tokens.append(tokenized[0][i])
+        current_token = tokenized[0][i]
+        if all(t[i] == current_token for t in tokenized):
+            common_tokens.append(current_token)
         else:
             break
 
-    if common_tokens:
-        return ''.join(common_tokens)
-
-    return ""
-
-
-def find_common_prefix(strings):
-    """Находит общий префикс для всех строк"""
-    if not strings:
-        return ""
-
-    min_len = min(len(s) for s in strings)
-
-    prefix = ""
-    for i in range(min_len):
-        char = strings[0][i]
-        if all(s[i] == char for s in strings):
-            prefix += char
-        else:
-            break
-
-    return prefix
+    # Склеиваем токены обратно в строку
+    return ''.join(common_tokens)
 
 
 def simplify_expression(expr):

@@ -1,5 +1,7 @@
 # transitions_builder.py
 
+from graph import optimize_state_graph  # Добавить импорт в начало файла
+
 transitions = {}
 state_counter = -1
 scripts = []  # Будем получать извне
@@ -11,7 +13,18 @@ def get_new_state_name():
     return f'S{state_counter}'
 
 
-def build_transitions(start_edges, input_scripts):
+def build_transitions(start_edges, input_scripts, optimize=True):
+    """
+    Строит граф переходов между состояниями.
+
+    Args:
+        start_edges: Список начальных характеристик
+        input_scripts: Список сценариев
+        optimize: Если True, выполняет оптимизацию графа (объединение эквивалентных состояний)
+
+    Returns:
+        dict: Словарь переходов (оптимизированный, если optimize=True)
+    """
     global state_counter, scripts
     scripts = input_scripts
     state_counter = -1
@@ -52,7 +65,6 @@ def build_transitions(start_edges, input_scripts):
                     transitions[current_state][edge].append(target_state)
                     transitions[target_state] = {}
             # Рекурсивно обрабатываем следующий шаг
-            # Берём только что созданное состояние
             next_state = transitions[current_state][edge][-1]
             process_path(seq, index + 1, next_state)
 
@@ -60,12 +72,11 @@ def build_transitions(start_edges, input_scripts):
         if seq and seq[0] in start_edges:
             process_path(seq, 0, initial_state)
 
-    return transitions
-
-
-def build_main_dict(start_edges, input_scripts):
-    global transitions
-    transitions = build_transitions(start_edges, input_scripts)
-    print("Стартовый словарь\n", transitions)
+    # Оптимизация графа (ОДИН РАЗ здесь)
+    if optimize:
+        print("Выполняется оптимизация графа...")
+        result = optimize_state_graph(transitions)
+        print("Оптимизация завершена")
+        return result
 
     return transitions
