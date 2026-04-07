@@ -1936,12 +1936,13 @@ def select_object():
             messagebox.showerror("Ошибка", "Ошибка декодирования JSON.")
         except Exception as e:
             messagebox.showerror("Ошибка", f"Произошла ошибка: {e}")
+            return
 
         # Извлечение данных
         name = data['name']
         regex = str(data['reg_var'])
         characteristics = data['props']
-        tps = data['tps']
+        tps_data = data['tps']  # Временно сохраняем в другую переменную
 
         # Удаление временной метки из имени, если есть
         pattern = r'\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}'
@@ -1951,10 +1952,44 @@ def select_object():
         app.insert_name(name + " " + current_datetime)
         app.insert_regex(regex)
 
-        for key, value in tps.items():
-            app.add_tp_edit()
-            app.text_area[key].insert(tk.INSERT, value)
+        # --- ЗАПОЛНЕНИЕ ПОЛЯ ХАРАКТЕРИСТИК (ЗАМЕНА СОДЕРЖИМОГО) ---
+        # Очищаем текущее содержимое поля характеристик
+        app.char_obj_txt.delete(1.0, tk.END)
 
+        # Заполняем поле характеристик новыми данными
+        for key, value in characteristics.items():
+            app.char_obj_txt.insert(tk.INSERT, key + ": " + value + "\n")
+
+        # Очищаем существующие текстовые потоки
+        existing_keys = list(app.text_area.keys())
+        for old_name in existing_keys:
+            if old_name in app.buttons:
+                if app.buttons[old_name].winfo_exists():
+                    btn_frame = app.buttons[old_name].master
+                    if btn_frame.winfo_exists():
+                        btn_frame.destroy()
+            if old_name in app.text_area:
+                if app.text_area[old_name].winfo_exists():
+                    text_frame = app.text_area[old_name].master
+                    if text_frame.winfo_exists():
+                        text_frame.destroy()
+
+        # Очищаем словари
+        tps = {}
+        app.buttons = {}
+        app.text_area = {}
+        app.text_reg = {}
+        app.scrollbars = {}
+        app.button_frames = {}
+        app.text_frames = {}
+
+        # Добавляем новые текстовые потоки
+        for key, value in tps_data.items():
+            app.add_tp_edit()
+            # Получаем последний добавленный ТФ
+            last_key = list(app.text_area.keys())[-1]
+            app.text_area[last_key].delete(1.0, tk.END)
+            app.text_area[last_key].insert(tk.INSERT, value)
 
 def restart_program():
     """Перезапускает приложение через запуск нового процесса"""
