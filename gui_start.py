@@ -597,7 +597,7 @@ class App:
         characteristics_frame.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         characteristics_frame.columnconfigure(0, weight=1)
 
-        self.char_obj_txt = tk.Text(characteristics_frame, width=TEXT_WIDTH, height=10, undo=False)
+        self.char_obj_txt = tk.Text(characteristics_frame, width=TEXT_WIDTH, height=10, undo=True)
         self.configure_undo_by_char(self.char_obj_txt)
         self.char_obj_txt.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         self.char_obj_txt.bind("<Key>", self.on_key_universal)
@@ -632,7 +632,7 @@ class App:
         regex_frame.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
         regex_frame.columnconfigure(0, weight=1)
 
-        self.regex_txt = tk.Text(regex_frame, width=TEXT_WIDTH, height=5, undo=False)
+        self.regex_txt = tk.Text(regex_frame, width=TEXT_WIDTH, height=5, undo=True)
         self.configure_undo_by_char(self.regex_txt)
         self.regex_txt.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
         self._bind_mousewheel_to_text(self.regex_txt)
@@ -763,7 +763,7 @@ class App:
         self.example_container.grid_remove()  # Скрыт по умолчанию
 
         # Поле ввода примера
-        self.example_text = tk.Text(self.example_container, width=TEXT_WIDTH, height=3, undo=False)
+        self.example_text = tk.Text(self.example_container, width=TEXT_WIDTH, height=3, undo=True)
         self.configure_undo_by_char(self.example_text)
         self.example_text.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         self.example_text.bind("<Key>", self.on_key_universal)
@@ -1102,10 +1102,15 @@ class App:
                 pass
 
     def redo_text(self):
-        """Повтор последнего действия"""
+        """Повтор последнего действия с проверкой"""
         active_text_area = self.root.focus_get()
         if isinstance(active_text_area, Text):
-            active_text_area.edit_redo()
+            try:
+                # Пытаемся выполнить redo, если ничего нет - игнорируем ошибку
+                active_text_area.edit_redo()
+            except tk.TclError:
+                # Игнорируем ошибку "nothing to redo"
+                pass
 
     def configure_undo_by_char(self, text_widget):
         """Настраивает текстовое поле для отмены по одному символу"""
@@ -1221,7 +1226,7 @@ class App:
             new_btn.grid(row=0, column=0, padx=5, pady=5)
 
             # Создаем текстовое поле
-            new_text_area = tk.Text(text_frame, width=60, height=8, undo=False)
+            new_text_area = tk.Text(text_frame, width=60, height=8, undo=True)
             self.configure_undo_by_char(new_text_area)
             new_text_area.grid(row=0, column=0, pady=5)
             new_text_area.bind("<Key>", self.on_key_universal)
@@ -1234,7 +1239,7 @@ class App:
             new_text_area['yscrollcommand'] = new_scrollbar.set
 
             # Создаем поле для regex
-            new_text_reg = tk.Text(text_frame, width=60, height=3, undo=False)
+            new_text_reg = tk.Text(text_frame, width=60, height=3, undo=True)
             self.configure_undo_by_char(new_text_reg)
             new_text_reg.grid(row=1, column=0, pady=5)
             new_text_area.bind("<Key>", self.on_key_universal)
@@ -1416,7 +1421,7 @@ class App:
             new_btn.grid(row=0, column=0, padx=5, pady=5)
 
             # Создаем текстовое поле
-            new_text_area = tk.Text(text_frame, width=60, height=8, undo=False)
+            new_text_area = tk.Text(text_frame, width=60, height=8, undo=True)
             self.configure_undo_by_char(new_text_area)
             new_text_area.grid(row=0, column=0, pady=5)
             new_text_area.bind("<Key>", self.on_key_universal)
@@ -1428,7 +1433,7 @@ class App:
             new_text_area['yscrollcommand'] = new_scrollbar.set
 
             # Создаем поле для regex
-            new_text_reg = tk.Text(text_frame, width=60, height=3, undo=False)
+            new_text_reg = tk.Text(text_frame, width=60, height=3, undo=True)
             self.configure_undo_by_char(new_text_reg)
             new_text_reg.grid(row=1, column=0, pady=5)
             new_text_area.bind("<Key>", self.on_key_universal)
