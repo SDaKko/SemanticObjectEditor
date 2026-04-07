@@ -1578,9 +1578,9 @@ class App:
 
     def create_context_menu(self, text_area):
         self.context_menu = Menu(self.root, tearoff=0)
-        self.context_menu.add_command(label="Копировать", command=lambda: self.copy_text())
-        self.context_menu.add_command(label="Вставить", command=lambda: self.paste_text())
-        self.context_menu.add_command(label="Создать характеристику", command=lambda: self.save_char())
+        self.context_menu.add_command(label="Копировать (Ctrl+C)", command=lambda: self.copy_text())
+        self.context_menu.add_command(label="Вставить (Ctrl+V)", command=lambda: self.paste_text())
+        self.context_menu.add_command(label="Создать характеристику (Ctrl+W)", command=lambda: self.save_char())
         text_area.bind("<Button-3>", lambda event: self.show_context_menu(event, text_area))
 
     def show_context_menu(self, event, text_area):
