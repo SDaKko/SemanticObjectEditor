@@ -392,12 +392,14 @@ class App:
         self.is_scrolling_text = False  # Флаг для отслеживания прокрутки текста
         self.scroll_timer = None  # Таймер для сброса флага
 
-        if characteristics:
-            last_key = next(reversed(characteristics.keys()))
-            last_num = int(last_key[1:])
-            self.q_counter = last_num + 1
-        else:
-            self.q_counter = 1
+        # if characteristics:
+        #     last_key = next(reversed(characteristics.keys()))
+        #     last_num = int(last_key[1:])
+        #     self.q_counter = last_num + 1
+        # else:
+        #     self.q_counter = 1
+
+        self.sync_q_counter()
 
         self.buttons = {}
         self.text_area = {}
@@ -612,7 +614,7 @@ class App:
             for key, value in characteristics.items():
                 self.char_obj_txt.insert(tk.INSERT, key + ": " + value + "\n")
 
-        self.button_edit_char = ttk.Button(characteristics_frame, text="Сохранить характеристики", state=NORMAL,
+        self.button_edit_char = ttk.Button(characteristics_frame, text="Обновить характеристики", state=NORMAL,
                                            command=self.save_changes)
         self.button_edit_char.grid(row=1, column=0, padx=5, pady=5)
 
@@ -911,26 +913,37 @@ class App:
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось сгенерировать текст: {e}")
 
-    def save_changes(self):
-        if self.confirm_action():
-            # Чтение текстового поля
-            text = self.char_obj_txt.get("1.0", tk.END).strip()
-            print(text)
-            global characteristics
-            characteristics = {}  # Очистка словаря, чтобы заново заполнить его
+    def save_changes(self, show_confirmation=True):
+        """Сохраняет характеристики из текстового поля в словарь
 
-            # Парсинг текста обратно в словарь
-            for line in text.split('\n'):
-                print(line)
-                line = line.strip()  # Убираем пробелы в начале и конце строки
-                if line:  # Проверка, чтобы не обработать пустые строки
-                    if ':' in line:  # Проверка на наличие двоеточия
-                        key, value = line.split(':', 1)  # Разделяем по первому двоеточию
-                        characteristics[key.strip()] = value.strip()  # Убираем лишние пробелы
-                    else:
-                        print(f"Пропущенная строка: '{line}' (нет двоеточия)")
+        Args:
+            show_confirmation: Показывать ли диалог подтверждения
+        """
+        if show_confirmation and not self.confirm_action():
+            return False
 
-            print("Сохранено:", characteristics)  # Выводим сохранённые данные в словаре
+        # Чтение текстового поля
+        text = self.char_obj_txt.get("1.0", tk.END).strip()
+        print(text)
+        global characteristics
+        characteristics = {}  # Очистка словаря, чтобы заново заполнить его
+
+        # Парсинг текста обратно в словарь
+        for line in text.split('\n'):
+            print(line)
+            line = line.strip()  # Убираем пробелы в начале и конце строки
+            if line:  # Проверка, чтобы не обработать пустые строки
+                if ':' in line:  # Проверка на наличие двоеточия
+                    key, value = line.split(':', 1)  # Разделяем по первому двоеточию
+                    characteristics[key.strip()] = value.strip()  # Убираем лишние пробелы
+                else:
+                    print(f"Пропущенная строка: '{line}' (нет двоеточия)")
+
+        print("Сохранено:", characteristics)  # Выводим сохранённые данные в словаре
+
+        # Синхронизируем счетчик после сохранения
+        self.sync_q_counter()
+
 
     # ------------------------------------------------------------------- ВАЛИДАТОР -------------------------------------------------------------------
 
@@ -1593,20 +1606,23 @@ class App:
             try:
                 # Проверяем, есть ли выделенный текст
                 if active_text_area.tag_ranges("sel"):
-                    selected_text = active_text_area.get("sel.first", "sel.last")  # Получаем выделенный текст
+                    selected_text = active_text_area.get("sel.first", "sel.last")
 
                     # Подсвечиваем выбранный текст
                     start = active_text_area.index("sel.first")
                     end = active_text_area.index("sel.last")
                     active_text_area.tag_add("highlight", start, end)
-                    # Устанавливаем параметры тега цветом
                     active_text_area.tag_config("highlight", background="lightgray")
 
-                    # Сохраняем выделенный текст в словаре
-                    key = f'q{self.q_counter}'  # Составляем ключ q1, q2, ...
-                    characteristics[key] = selected_text  # Добавляем в словарь
-                    self.q_counter += 1  # Увеличиваем счетчик для следующего ключа
+                    # СИНХРОНИЗИРУЕМ СЧЕТЧИК перед добавлением
+                    self.sync_q_counter()
 
+                    # Сохраняем выделенный текст в словаре
+                    key = f'q{self.q_counter}'
+                    characteristics[key] = selected_text
+                    self.q_counter += 1
+
+                    # Добавляем в текстовое поле характеристик
                     self.char_obj_txt.mark_set(tk.INSERT, tk.END)
                     self.char_obj_txt.insert(tk.INSERT, key + ": " + selected_text + "\n")
                     self.char_obj_txt.see(tk.END)
@@ -1614,7 +1630,21 @@ class App:
                 else:
                     messagebox.showwarning("Предупреждение", "Нет выделенного текста.")
             except tk.TclError:
-                pass  # Игнорируем ошибку, если ничего не выделено
+                pass
+
+    def sync_q_counter(self):
+        """Синхронизирует q_counter с существующими характеристиками"""
+        if characteristics:
+            # Находим максимальный номер среди существующих ключей
+            max_num = 0
+            for key in characteristics.keys():
+                if key.startswith('q') and key[1:].isdigit():
+                    num = int(key[1:])
+                    if num > max_num:
+                        max_num = num
+            self.q_counter = max_num + 1
+        else:
+            self.q_counter = 1
 
     # ------------------------------------------------------------------- РАБОТА С ТЕКСТОМ -------------------------------------------------------------------
 
@@ -1704,6 +1734,10 @@ class App:
     # ------------------------------------------------------------------- ГЕНЕРАЦИЯ -------------------------------------------------------------------
 
     def start_generation(self):
+
+        # Сохраняем характеристики перед генерацией
+        self.save_changes(show_confirmation=False)
+
         if not tps or len(tps) == 0:
             messagebox.showwarning("Предупреждение",
                                    "Нет текстовых потоков для обработки. Пожалуйста, добавьте хотя бы один текстовый поток.")
@@ -1959,6 +1993,9 @@ def select_object():
         # Заполняем поле характеристик новыми данными
         for key, value in characteristics.items():
             app.char_obj_txt.insert(tk.INSERT, key + ": " + value + "\n")
+
+        # СИНХРОНИЗИРУЕМ СЧЕТЧИК после загрузки
+        app.sync_q_counter()
 
         # Очищаем существующие текстовые потоки
         existing_keys = list(app.text_area.keys())

@@ -124,9 +124,9 @@ def calculate_graph_metrics(dict_char):
     density_score  = density
 
     # Взвешенная сложность
-    complexity_score = (vertices_score * 0.3 +
-                        edges_score    * 0.4 +
-                        density_score  * 0.3)
+    complexity_score = (vertices_score * 0.4 +
+                        edges_score    * 0.5 +
+                        density_score  * 0.1)
 
     complexity_score = min(complexity_score, 1.0)
 
