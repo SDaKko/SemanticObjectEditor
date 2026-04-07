@@ -388,31 +388,33 @@ class App:
         global characteristics
         global tps
         global regex
-        self.button_counter = 0  # Счетчик кнопок
+        self.button_counter = 0
+        self.is_scrolling_text = False  # Флаг для отслеживания прокрутки текста
+        self.scroll_timer = None  # Таймер для сброса флага
 
         if characteristics:
-            last_key = next(reversed(characteristics.keys()))  # Находим максимальный ключ
-            last_num = int(last_key[1:])  # Извлекаем номер, преобразуем в int
+            last_key = next(reversed(characteristics.keys()))
+            last_num = int(last_key[1:])
             self.q_counter = last_num + 1
         else:
             self.q_counter = 1
 
-        self.buttons = {}  # Словарь для хранения кнопок
-        self.text_area = {}  #
-        self.scrollbars = {}  # Словарь для хранения скроллбаров
-        self.text_reg = {}  # Словарь для хранения текстовых полей регулярных выражений
-        self.transitions = None  # Для хранения графа после генерации
+        self.buttons = {}
+        self.text_area = {}
+        self.scrollbars = {}
+        self.text_reg = {}
+        self.transitions = None
 
-        # Создаем Canvas и Scrollbar
+        # Создаем Canvas и Scrollbar для левой панели
         self.canvas = tk.Canvas(root, width=frame_width + 100, height=screen_height - 100)
         self.scrollbar = ttk.Scrollbar(root, orient="vertical", command=self.canvas.yview)
 
         # Создаем фрейм в Canvas
-        self.frame_tp = ttk.Frame(self.canvas, height=screen_height - 50,)
+        self.frame_tp = ttk.Frame(self.canvas, height=screen_height - 50)
         self.canvas.create_window((0, 0), window=self.frame_tp, anchor="nw")
 
         # Привязываем настройку области прокрутки к изменению конфигурации
-        self.frame_tp.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.frame_tp.bind("<Configure>", lambda e: self._update_scroll_region())
 
         # Настройка прокрутки
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
@@ -421,120 +423,284 @@ class App:
         self.canvas.grid(row=0, column=0, sticky="nsew")
         self.scrollbar.grid(row=0, column=1, sticky="ns")
 
+        # Добавляем поддержку прокрутки для левой панели
+        self._bind_left_panel_scroll()
+
         # Изначальная кнопка
         self.create_widgets()
+
+    def _update_scroll_region(self):
+        """Обновляет область прокрутки только если содержимое превышает видимую область"""
+        self.canvas.update_idletasks()
+        bbox = self.canvas.bbox("all")
+        if bbox:
+            # Получаем высоту canvas и содержимого
+            canvas_height = self.canvas.winfo_height()
+            content_height = bbox[3] - bbox[1]
+
+            # Обновляем scrollregion только если содержимое выше canvas
+            if content_height > canvas_height:
+                self.canvas.configure(scrollregion=bbox)
+                # Показываем скроллбар
+                self.scrollbar.grid()
+            else:
+                # Скрываем скроллбар если не нужен
+                self.scrollbar.grid_remove()
+                # Сбрасываем позицию прокрутки
+                self.canvas.yview_moveto(0)
+        else:
+            self.scrollbar.grid_remove()
+
+    def _bind_left_panel_scroll(self):
+        """Привязывает прокрутку только к левой панели"""
+
+        def on_mousewheel(event):
+            # Проверяем, нужно ли показывать прокрутку
+            if self._is_scroll_needed():
+                self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+
+        def on_mousewheel_linux_up(event):
+            if self._is_scroll_needed():
+                self.canvas.yview_scroll(-1, "units")
+            return "break"
+
+        def on_mousewheel_linux_down(event):
+            if self._is_scroll_needed():
+                self.canvas.yview_scroll(1, "units")
+            return "break"
+
+        # Привязываем к canvas
+        self.canvas.bind("<MouseWheel>", on_mousewheel)
+        self.canvas.bind("<Button-4>", on_mousewheel_linux_up)
+        self.canvas.bind("<Button-5>", on_mousewheel_linux_down)
+
+        # Привязываем к frame_tp и всем его потомкам
+        self._bind_scroll_to_widget(self.frame_tp)
+
+    def _is_scroll_needed(self):
+        """Проверяет, нужна ли прокрутка"""
+        try:
+            bbox = self.canvas.bbox("all")
+            if not bbox:
+                return False
+            canvas_height = self.canvas.winfo_height()
+            content_height = bbox[3] - bbox[1]
+            return content_height > canvas_height
+        except:
+            return False
+
+    def _bind_scroll_to_widget(self, widget):
+        """Рекурсивно привязывает прокрутку к виджетам (только для левой панели)"""
+
+        def on_mousewheel(event):
+            if not self.is_scrolling_text and self._is_scroll_needed():
+                self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+
+        def on_mousewheel_linux_up(event):
+            if not self.is_scrolling_text and self._is_scroll_needed():
+                self.canvas.yview_scroll(-1, "units")
+            return "break"
+
+        def on_mousewheel_linux_down(event):
+            if not self.is_scrolling_text and self._is_scroll_needed():
+                self.canvas.yview_scroll(1, "units")
+            return "break"
+
+        # Привязываем к текущему виджету
+        widget.bind("<MouseWheel>", on_mousewheel)
+        widget.bind("<Button-4>", on_mousewheel_linux_up)
+        widget.bind("<Button-5>", on_mousewheel_linux_down)
+
+        # Рекурсивно обрабатываем дочерние виджеты
+        for child in widget.winfo_children():
+            self._bind_scroll_to_widget(child)
+
+    def _bind_mousewheel_to_text(self, text_widget):
+        """Привязывает прокрутку только к текстовому полю (без передачи родителю)"""
+
+        def on_mousewheel(event):
+            # Устанавливаем флаг прокрутки текста
+            self.is_scrolling_text = True
+
+            # Прокручиваем текстовое поле
+            text_widget.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+            # Сбрасываем флаг через короткое время
+            if self.scroll_timer:
+                self.root.after_cancel(self.scroll_timer)
+            self.scroll_timer = self.root.after(100, self._reset_scroll_flag)
+
+            return "break"
+
+        def on_mousewheel_linux_up(event):
+            self.is_scrolling_text = True
+            text_widget.yview_scroll(-1, "units")
+            if self.scroll_timer:
+                self.root.after_cancel(self.scroll_timer)
+            self.scroll_timer = self.root.after(100, self._reset_scroll_flag)
+            return "break"
+
+        def on_mousewheel_linux_down(event):
+            self.is_scrolling_text = True
+            text_widget.yview_scroll(1, "units")
+            if self.scroll_timer:
+                self.root.after_cancel(self.scroll_timer)
+            self.scroll_timer = self.root.after(100, self._reset_scroll_flag)
+            return "break"
+
+        def on_enter(event):
+            # При входе в текстовое поле блокируем прокрутку панели
+            self.is_scrolling_text = True
+
+        def on_leave(event):
+            # При выходе из текстового поля сбрасываем флаг
+            if self.scroll_timer:
+                self.root.after_cancel(self.scroll_timer)
+            self.scroll_timer = self.root.after(50, self._reset_scroll_flag)
+
+        text_widget.bind("<MouseWheel>", on_mousewheel)
+        text_widget.bind("<Button-4>", on_mousewheel_linux_up)
+        text_widget.bind("<Button-5>", on_mousewheel_linux_down)
+        text_widget.bind("<Enter>", on_enter)
+        text_widget.bind("<Leave>", on_leave)
+
+    def _reset_scroll_flag(self):
+        """Сбрасывает флаг прокрутки текста"""
+        self.is_scrolling_text = False
+        self.scroll_timer = None
 
     # ------------------------------------------------------------------- создание стартовых элементов -------------------------------------------------------------------
 
     def create_widgets(self):
-        # Создаем фрейм для работы с характеристиками
-        characteristics_frame = ttk.Frame(frame_results, width=frame_width - 690,)
-        characteristics_frame.grid(row=0, column=0, padx=5, pady=5)
+        # Создаем фрейм для кнопок на левой панели
+        self.left_buttons_frame = ttk.Frame(self.frame_tp)
+        self.left_buttons_frame.grid(row=0, column=1, padx=5, pady=5, sticky="n")
 
-        # Подпись к полю
-        char_name = tk.Label(characteristics_frame, text="Характеристики")
-        char_name.grid(row=0, column=0, padx=5, pady=(5, 0), sticky="w")
+        # Создаем контейнер для текстовых потоков
+        self.text_streams_frame = ttk.Frame(self.frame_tp)
+        self.text_streams_frame.grid(row=0, column=0, padx=5, pady=5, sticky="n")
 
-        # Создаем поле для характеристик объекта
-        self.char_obj_txt = tk.Text(characteristics_frame, width=frame_width - 690, height=10)
-        self.char_obj_txt.grid(row=1, column=0, padx=5, pady=(5, 0), sticky="w")
+        # Создаем основной контейнер для правой панели
+        main_container = ttk.Frame(frame_results)
+        main_container.grid(row=0, column=0, padx=(10, 10), pady=5, sticky="ew")
+        main_container.columnconfigure(0, weight=1)
+
+        # Устанавливаем единую ширину для всех текстовых полей
+        TEXT_WIDTH = 80
+
+        # ==================== ХАРАКТЕРИСТИКИ ====================
+        characteristics_frame = ttk.LabelFrame(main_container, text="Характеристики")
+        characteristics_frame.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        characteristics_frame.columnconfigure(0, weight=1)
+
+        self.char_obj_txt = tk.Text(characteristics_frame, width=TEXT_WIDTH, height=10)
+        self.char_obj_txt.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+
+        char_scrollbar = ttk.Scrollbar(characteristics_frame, orient="vertical", command=self.char_obj_txt.yview)
+        char_scrollbar.grid(row=0, column=1, sticky='ns', pady=5)
+        self.char_obj_txt['yscrollcommand'] = char_scrollbar.set
+        self._bind_mousewheel_to_text(self.char_obj_txt)
 
         if characteristics:
             self.char_obj_txt.delete(1.0, tk.END)
             for key, value in characteristics.items():
                 self.char_obj_txt.insert(tk.INSERT, key + ": " + value + "\n")
 
-        # Кнопка для редактирования характеристик
-        self.button_edit_char = ttk.Button(characteristics_frame, text="Сохранить характеристики", state=NORMAL, command=self.save_changes)
-        self.button_edit_char.grid(row=2, column=0, padx=5, pady=5)
+        self.button_edit_char = ttk.Button(characteristics_frame, text="Сохранить характеристики", state=NORMAL,
+                                           command=self.save_changes)
+        self.button_edit_char.grid(row=1, column=0, padx=5, pady=5)
 
-        # Подпись к полю
-        obj_name = tk.Label(frame_results, text="Имя объекта")
-        obj_name.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        # ==================== ИМЯ ОБЪЕКТА ====================
+        name_frame = ttk.LabelFrame(main_container, text="Имя объекта")
+        name_frame.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
+        name_frame.columnconfigure(0, weight=1)
 
-        # Создаем поле для имени объекта
-        self.name_obj_txt = tk.Text(frame_results, width=frame_width - 690, height=1)
-        self.name_obj_txt.grid(row=2, column=0, padx=5, pady=5)
+        self.name_obj_txt = tk.Text(name_frame, width=TEXT_WIDTH, height=1)
+        self.name_obj_txt.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self._bind_mousewheel_to_text(self.name_obj_txt)
 
-        # Создаем поле для регулярного выражения
-        self.regex_txt = tk.Text(frame_results, width=frame_width - 690, height=5)
-        self.regex_txt.grid(row=3, column=0, padx=5, pady=5)
+        # ==================== РЕГУЛЯРНОЕ ВЫРАЖЕНИЕ ====================
+        regex_frame = ttk.LabelFrame(main_container, text="Регулярное выражение")
+        regex_frame.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
+        regex_frame.columnconfigure(0, weight=1)
 
-        # Установка валидации для текстового поля
+        self.regex_txt = tk.Text(regex_frame, width=TEXT_WIDTH, height=5)
+        self.regex_txt.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        self._bind_mousewheel_to_text(self.regex_txt)
+
+        regex_scrollbar = ttk.Scrollbar(regex_frame, orient="vertical", command=self.regex_txt.yview)
+        regex_scrollbar.grid(row=0, column=1, sticky='ns', pady=5)
+        self.regex_txt['yscrollcommand'] = regex_scrollbar.set
         self.regex_txt.bind("<Key>", self.on_key)
 
-        # Создаем фрейм для кнопок работы с регулярным выражением
-        self.job_button_frame = ttk.Frame(frame_results)
-        self.job_button_frame.grid(row=4, column=0, padx=5, pady=5)
+        # ==================== КНОПКИ ====================
+        self.job_button_frame = ttk.Frame(main_container)
+        self.job_button_frame.grid(row=3, column=0, padx=5, pady=5)
 
-        # Кнопка для запуска генерации регулярного выражения
-        self.button_generate = ttk.Button(self.job_button_frame, text="Генерация", state=NORMAL, command=self.start_generation)
+        self.button_generate = ttk.Button(self.job_button_frame, text="Генерация", state=NORMAL,
+                                          command=self.start_generation)
         self.button_generate.grid(row=0, column=0, padx=5, pady=5)
 
-        # Кнопка для записи объекта в файл
-        self.button_save_obj = ttk.Button(self.job_button_frame, text="Сохранить объект", state=DISABLED, command=self.save_object)
+        self.button_save_obj = ttk.Button(self.job_button_frame, text="Сохранить объект", state=DISABLED,
+                                          command=self.save_object)
         self.button_save_obj.grid(row=0, column=1, padx=5, pady=5)
 
-        # --- Кнопка: Показать граф состояний ---
         self.button_plot_state_graph = ttk.Button(
             self.job_button_frame, text="Показать граф состояний", state=DISABLED, command=self.show_state_graph
         )
         self.button_plot_state_graph.grid(row=0, column=2, padx=5, pady=5)
 
-        # --- Кнопка: Показать граф характеристик ---
         self.button_plot_char_graph = ttk.Button(
             self.job_button_frame, text="Показать граф характеристик", state=DISABLED, command=self.show_char_graph
         )
         self.button_plot_char_graph.grid(row=0, column=3, padx=5, pady=5)
 
-        # Фрейм для метрик графа
-        metrics_frame = ttk.LabelFrame(frame_results, text="Метрики графа", width=frame_width - 690)
-        metrics_frame.grid(row=5, column=0, padx=5, pady=5, sticky="ew")
+        # ==================== МЕТРИКИ ГРАФА ====================
+        metrics_frame = ttk.LabelFrame(main_container, text="Метрики графа")
+        metrics_frame.grid(row=4, column=0, padx=5, pady=5, sticky="ew")
+        metrics_frame.columnconfigure(0, weight=1)
 
-        # Поле для отображения метрик
-        self.metrics_txt = tk.Text(metrics_frame, width=frame_width - 690, height=4, state=tk.DISABLED)
-        self.metrics_txt.grid(row=0, column=0, padx=5, pady=5)
+        self.metrics_txt = tk.Text(metrics_frame, width=TEXT_WIDTH, height=4, state=tk.DISABLED)
+        self.metrics_txt.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
 
-        # Фрейм для категорий характеристик
-        categories_frame = ttk.LabelFrame(frame_results, text="Категории характеристик по метрикам", width=frame_width - 690)
-        categories_frame.grid(row=6, column=0, padx=5, pady=5, sticky="ew")
+        metrics_scrollbar = ttk.Scrollbar(metrics_frame, orient="vertical", command=self.metrics_txt.yview)
+        metrics_scrollbar.grid(row=0, column=1, sticky='ns', pady=5)
+        self.metrics_txt['yscrollcommand'] = metrics_scrollbar.set
+        self._bind_mousewheel_to_text(self.metrics_txt)
 
-        # Поле для отображения категорий
-        self.categories_txt = tk.Text(categories_frame, width=frame_width - 690, height=8, state=tk.DISABLED)
-        self.categories_txt.grid(row=0, column=0, padx=5, pady=5)
+        # ==================== КАТЕГОРИИ ХАРАКТЕРИСТИК ====================
+        categories_frame = ttk.LabelFrame(main_container, text="Категории характеристик по метрикам")
+        categories_frame.grid(row=5, column=0, padx=5, pady=5, sticky="ew")
+        categories_frame.columnconfigure(0, weight=1)
 
-        # Скроллбар для категорий
+        self.categories_txt = tk.Text(categories_frame, width=TEXT_WIDTH, height=8, state=tk.DISABLED)
+        self.categories_txt.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self._bind_mousewheel_to_text(self.categories_txt)
+
         categories_scrollbar = ttk.Scrollbar(categories_frame, orient="vertical", command=self.categories_txt.yview)
-        categories_scrollbar.grid(row=0, column=1, sticky='ns')
+        categories_scrollbar.grid(row=0, column=1, sticky='ns', pady=5)
         self.categories_txt['yscrollcommand'] = categories_scrollbar.set
 
-        # Фрейм для выбора типа градации
-        gradation_frame = ttk.Frame(frame_results)
-        gradation_frame.grid(row=7, column=0, padx=5, pady=5)
+        # ==================== ТИП ГРАДАЦИИ ====================
+        gradation_frame = ttk.LabelFrame(main_container, text="Тип градации")
+        gradation_frame.grid(row=6, column=0, padx=5, pady=5, sticky="ew")
 
-        # Метка для выбора градации
-        gradation_label = tk.Label(gradation_frame, text="Тип градации:")
-        gradation_label.grid(row=0, column=0, padx=5, pady=5)
-
-        # Переменная для выбора типа градации
         self.gradation_type = tk.StringVar(value="simple")
 
-        # Радиокнопки для выбора типа градации
         simple_radio = ttk.Radiobutton(gradation_frame, text="Простая (0.5, 0.75, 1.0)",
                                        variable=self.gradation_type, value="simple")
-        simple_radio.grid(row=0, column=1, padx=5, pady=5)
+        simple_radio.grid(row=0, column=0, padx=5, pady=5)
 
         detailed_radio = ttk.Radiobutton(gradation_frame, text="Детальная (0.5-1.0)",
                                          variable=self.gradation_type, value="detailed")
-        detailed_radio.grid(row=0, column=2, padx=5, pady=5)
+        detailed_radio.grid(row=0, column=1, padx=5, pady=5)
 
+        # ==================== ГЕНЕРАЦИЯ ТЕКСТА С ПОМОЩЬЮ LLM ====================
+        llm_frame = ttk.LabelFrame(main_container, text="Генерация текста с помощью ИИ")
+        llm_frame.grid(row=7, column=0, padx=5, pady=10, sticky="ew")
 
-
-        # --- ГЕНЕРАЦИЯ ТЕКСТА С ПОМОЩЬЮ LLM ---
-        llm_frame = ttk.LabelFrame(frame_results, text="Генерация текста с помощью ИИ")
-        llm_frame.grid(row=8, column=0, padx=5, pady=10, sticky="ew")
-
-        # Выбор типа генерации
         self.gen_type = tk.StringVar(value="style")
 
         ttk.Radiobutton(llm_frame, text="По стилю", variable=self.gen_type, value="style").grid(row=0, column=0, padx=5,
@@ -542,12 +708,11 @@ class App:
         ttk.Radiobutton(llm_frame, text="По примеру", variable=self.gen_type, value="example").grid(row=0, column=1,
                                                                                                     padx=5, pady=2)
 
-        # Поле ввода примера (видимо только при "по примеру")
-        self.example_text = tk.Text(llm_frame, width=60, height=3)
+        self.example_text = tk.Text(llm_frame, width=TEXT_WIDTH, height=3)
         self.example_text.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
-        self.example_text.grid_remove()  # Скрыто по умолчанию
+        self.example_text.grid_remove()
+        self._bind_mousewheel_to_text(self.example_text)
 
-        # Выбор длины
         length_label = tk.Label(llm_frame, text="Длина:")
         length_label.grid(row=2, column=0, padx=5, pady=2, sticky="w")
 
@@ -556,12 +721,87 @@ class App:
                                     state="readonly", width=10)
         length_combo.grid(row=2, column=1, padx=5, pady=2)
 
-        # Кнопка генерации
         self.generate_btn = ttk.Button(llm_frame, text="Сгенерировать текст", command=self.generate_llm_text)
         self.generate_btn.grid(row=3, column=0, columnspan=3, pady=5)
 
-        # Привязка изменения типа к отображению поля
         self.gen_type.trace("w", self.toggle_example_field)
+
+        # Привязываем прокрутку для правой панели
+        self._bind_right_panel_scroll()
+
+        # Обновляем область прокрутки
+        self.root.after(100, self._update_scroll_region)
+
+    def _bind_right_panel_scroll(self):
+        """Привязывает прокрутку только к правой панели"""
+        global results_canvas, frame_results
+
+        def on_mousewheel(event):
+            if not self.is_scrolling_text:
+                # Проверяем, нужно ли показывать прокрутку
+                if self._is_right_scroll_needed():
+                    results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+
+        def on_mousewheel_linux_up(event):
+            if not self.is_scrolling_text and self._is_right_scroll_needed():
+                results_canvas.yview_scroll(-1, "units")
+            return "break"
+
+        def on_mousewheel_linux_down(event):
+            if not self.is_scrolling_text and self._is_right_scroll_needed():
+                results_canvas.yview_scroll(1, "units")
+            return "break"
+
+        results_canvas.bind("<MouseWheel>", on_mousewheel)
+        results_canvas.bind("<Button-4>", on_mousewheel_linux_up)
+        results_canvas.bind("<Button-5>", on_mousewheel_linux_down)
+
+        self._bind_scroll_to_right_panel(frame_results)
+
+    def _is_right_scroll_needed(self):
+        """Проверяет, нужна ли прокрутка для правой панели"""
+        global results_canvas, frame_results
+        try:
+            results_canvas.update_idletasks()
+            bbox = results_canvas.bbox("all")
+            if not bbox:
+                return False
+            canvas_height = results_canvas.winfo_height()
+            content_height = bbox[3] - bbox[1]
+            return content_height > canvas_height
+        except:
+            return False
+
+    def _bind_scroll_to_right_panel(self, widget):
+        """Рекурсивно привязывает прокрутку к виджетам правой панели"""
+        global results_canvas
+
+        def on_mousewheel(event):
+            if not self.is_scrolling_text and not isinstance(widget, tk.Text):
+                if self._is_right_scroll_needed():
+                    results_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+
+        def on_mousewheel_linux_up(event):
+            if not self.is_scrolling_text and not isinstance(widget, tk.Text):
+                if self._is_right_scroll_needed():
+                    results_canvas.yview_scroll(-1, "units")
+            return "break"
+
+        def on_mousewheel_linux_down(event):
+            if not self.is_scrolling_text and not isinstance(widget, tk.Text):
+                if self._is_right_scroll_needed():
+                    results_canvas.yview_scroll(1, "units")
+            return "break"
+
+        if not isinstance(widget, tk.Text):
+            widget.bind("<MouseWheel>", on_mousewheel)
+            widget.bind("<Button-4>", on_mousewheel_linux_up)
+            widget.bind("<Button-5>", on_mousewheel_linux_down)
+
+        for child in widget.winfo_children():
+            self._bind_scroll_to_right_panel(child)
 
     def confirm_action(self):
         return messagebox.askyesno("Подтверждение", "Вы уверены, что хотите сохранить характеристики?")
@@ -697,9 +937,13 @@ class App:
 
         # Привязываем контекстное меню
         self.create_context_menu(new_text_area)
+        self._bind_scroll_to_widget(self.button_frame)
 
         # Увеличение счетчика
         self.button_counter += 1
+
+        # Обновляем область прокрутки
+        self.root.after(50, self._update_scroll_region)
 
     def load_tp(self, tp_name, button, new_text_area):
         # Кнопка остается активной всегда, не меняем её состояние
