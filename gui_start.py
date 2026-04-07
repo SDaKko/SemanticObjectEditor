@@ -1037,6 +1037,13 @@ class App:
             elif keycode == 89:  # Ctrl+Y
                 self.redo_text()
                 return "break"
+            elif keycode == 87:  # Ctrl+W
+                active_widget = self.root.focus_get()
+                # Проверяем, находится ли виджет внутри фрейма ТФ
+                if active_widget and active_widget.master in self.text_frames.values():
+                    self.save_char()
+                    return "break"
+                return "break"
             else:
                 return "break"
 
@@ -1436,7 +1443,7 @@ class App:
             new_text_reg = tk.Text(text_frame, width=60, height=3, undo=True)
             self.configure_undo_by_char(new_text_reg)
             new_text_reg.grid(row=1, column=0, pady=5)
-            new_text_area.bind("<Key>", self.on_key_universal)
+            new_text_reg.bind("<Key>", self.on_key_universal)
             new_text_reg.insert(tk.END, data['reg_content'])
 
             # Создаем кнопку удаления
