@@ -700,30 +700,85 @@ class App:
         # ==================== ГЕНЕРАЦИЯ ТЕКСТА С ПОМОЩЬЮ LLM ====================
         llm_frame = ttk.LabelFrame(main_container, text="Генерация текста с помощью ИИ")
         llm_frame.grid(row=7, column=0, padx=5, pady=10, sticky="ew")
+        llm_frame.columnconfigure(0, weight=1)
 
+        # Выбор типа генерации
         self.gen_type = tk.StringVar(value="style")
 
-        ttk.Radiobutton(llm_frame, text="По стилю", variable=self.gen_type, value="style").grid(row=0, column=0, padx=5,
-                                                                                                pady=2)
-        ttk.Radiobutton(llm_frame, text="По примеру", variable=self.gen_type, value="example").grid(row=0, column=1,
-                                                                                                    padx=5, pady=2)
+        gen_type_frame = ttk.Frame(llm_frame)
+        gen_type_frame.grid(row=0, column=0, pady=5)
 
-        self.example_text = tk.Text(llm_frame, width=TEXT_WIDTH, height=3)
-        self.example_text.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
-        self.example_text.grid_remove()
+        ttk.Radiobutton(gen_type_frame, text="По стилю", variable=self.gen_type, value="style").pack(side="left",
+                                                                                                     padx=5)
+        ttk.Radiobutton(gen_type_frame, text="По примеру", variable=self.gen_type, value="example").pack(side="left",
+                                                                                                         padx=5)
+
+        # Контейнер для полей при выборе "По стилю"
+        self.style_container = ttk.Frame(llm_frame)
+        self.style_container.grid(row=1, column=0, pady=5, sticky="ew")
+        self.style_container.columnconfigure(0, weight=1)
+
+        # Фрейм для выбора стиля
+        style_select_frame = ttk.Frame(self.style_container)
+        style_select_frame.grid(row=0, column=0, pady=5)
+
+        style_label = tk.Label(style_select_frame, text="Стиль:")
+        style_label.pack(side="left", padx=5)
+
+        self.style_var = tk.StringVar(value="манипулятивный")
+        style_combo = ttk.Combobox(style_select_frame, textvariable=self.style_var,
+                                   values=["манипулятивный", "терапевтический", "загадочный", "провокационный"],
+                                   state="readonly", width=20)
+        style_combo.pack(side="left", padx=5)
+
+        # Фрейм для выбора длины (для стиля)
+        style_length_frame = ttk.Frame(self.style_container)
+        style_length_frame.grid(row=1, column=0, pady=5)
+
+        style_length_label = tk.Label(style_length_frame, text="Длина:")
+        style_length_label.pack(side="left", padx=5)
+
+        self.style_length_var = tk.StringVar(value="средний")
+        style_length_combo = ttk.Combobox(style_length_frame, textvariable=self.style_length_var,
+                                          values=["короткий", "средний", "длинный"],
+                                          state="readonly", width=10)
+        style_length_combo.pack(side="left", padx=5)
+
+        # Кнопка генерации для стиля
+        self.generate_style_btn = ttk.Button(self.style_container, text="Сгенерировать текст",
+                                             command=lambda: self.generate_llm_text())
+        self.generate_style_btn.grid(row=2, column=0, pady=5)
+
+        # Контейнер для полей при выборе "По примеру"
+        self.example_container = ttk.Frame(llm_frame)
+        self.example_container.grid(row=1, column=0, pady=5, sticky="ew")
+        self.example_container.columnconfigure(0, weight=1)
+        self.example_container.grid_remove()  # Скрыт по умолчанию
+
+        # Поле ввода примера
+        self.example_text = tk.Text(self.example_container, width=TEXT_WIDTH, height=3)
+        self.example_text.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         self._bind_mousewheel_to_text(self.example_text)
 
-        length_label = tk.Label(llm_frame, text="Длина:")
-        length_label.grid(row=2, column=0, padx=5, pady=2, sticky="w")
+        # Фрейм для выбора длины (для примера)
+        example_length_frame = ttk.Frame(self.example_container)
+        example_length_frame.grid(row=1, column=0, pady=5)
 
-        self.length_var = tk.StringVar(value="средний")
-        length_combo = ttk.Combobox(llm_frame, textvariable=self.length_var, values=["короткий", "средний", "длинный"],
-                                    state="readonly", width=10)
-        length_combo.grid(row=2, column=1, padx=5, pady=2)
+        example_length_label = tk.Label(example_length_frame, text="Длина:")
+        example_length_label.pack(side="left", padx=5)
 
-        self.generate_btn = ttk.Button(llm_frame, text="Сгенерировать текст", command=self.generate_llm_text)
-        self.generate_btn.grid(row=3, column=0, columnspan=3, pady=5)
+        self.example_length_var = tk.StringVar(value="средний")
+        example_length_combo = ttk.Combobox(example_length_frame, textvariable=self.example_length_var,
+                                            values=["короткий", "средний", "длинный"],
+                                            state="readonly", width=10)
+        example_length_combo.pack(side="left", padx=5)
 
+        # Кнопка генерации для примера
+        self.generate_example_btn = ttk.Button(self.example_container, text="Сгенерировать текст",
+                                               command=lambda: self.generate_llm_text())
+        self.generate_example_btn.grid(row=2, column=0, pady=5)
+
+        # Привязка изменения типа к отображению контейнеров
         self.gen_type.trace("w", self.toggle_example_field)
 
         # Привязываем прокрутку для правой панели
@@ -807,32 +862,30 @@ class App:
         return messagebox.askyesno("Подтверждение", "Вы уверены, что хотите сохранить характеристики?")
 
     def toggle_example_field(self, *args):
+        """Показывает или скрывает контейнеры в зависимости от выбранного типа"""
         if self.gen_type.get() == "example":
-            self.example_text.grid()
-        else:
-            self.example_text.grid_remove()
+            self.style_container.grid_remove()
+            self.example_container.grid()
+        else:  # style
+            self.style_container.grid()
+            self.example_container.grid_remove()
 
     def generate_llm_text(self):
         if not LLM_AVAILABLE:
             messagebox.showerror("Ошибка", "Сервис LLM недоступен. Убедитесь, что получен токен доступа к GigaChat.")
             return
 
-        length = self.length_var.get()
-
         try:
             if self.gen_type.get() == "style":
-                style = simpledialog.askstring(
-                    "Выбор стиля",
-                    "Доступные стили:\n- манипулятивный\n- терапевтический\n- загадочный\n- провокационный\n\nВведите стиль:"
-                )
-                if not style:
-                    return
+                style = self.style_var.get()
+                length = self.style_length_var.get()
                 result = generator.generate_by_style(style, length)
             else:  # example
                 example = self.example_text.get("1.0", tk.END).strip()
                 if not example:
                     messagebox.showwarning("Предупреждение", "Введите пример текста.")
                     return
+                length = self.example_length_var.get()
                 result = generator.generate_by_example(example, length)
 
             if "Ошибка" in result or "[Ошибка" in result:
