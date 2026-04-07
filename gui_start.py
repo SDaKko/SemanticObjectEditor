@@ -597,8 +597,10 @@ class App:
         characteristics_frame.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         characteristics_frame.columnconfigure(0, weight=1)
 
-        self.char_obj_txt = tk.Text(characteristics_frame, width=TEXT_WIDTH, height=10)
+        self.char_obj_txt = tk.Text(characteristics_frame, width=TEXT_WIDTH, height=10, undo=False)
+        self.configure_undo_by_char(self.char_obj_txt)
         self.char_obj_txt.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.char_obj_txt.bind("<Key>", self.on_key_universal)
 
         char_scrollbar = ttk.Scrollbar(characteristics_frame, orient="vertical", command=self.char_obj_txt.yview)
         char_scrollbar.grid(row=0, column=1, sticky='ns', pady=5)
@@ -620,7 +622,9 @@ class App:
         name_frame.columnconfigure(0, weight=1)
 
         self.name_obj_txt = tk.Text(name_frame, width=TEXT_WIDTH, height=1)
+        self.configure_undo_by_char(self.name_obj_txt)
         self.name_obj_txt.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.name_obj_txt.bind("<Key>", self.on_key_universal)
         self._bind_mousewheel_to_text(self.name_obj_txt)
 
         # ==================== РЕГУЛЯРНОЕ ВЫРАЖЕНИЕ ====================
@@ -628,7 +632,8 @@ class App:
         regex_frame.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
         regex_frame.columnconfigure(0, weight=1)
 
-        self.regex_txt = tk.Text(regex_frame, width=TEXT_WIDTH, height=5)
+        self.regex_txt = tk.Text(regex_frame, width=TEXT_WIDTH, height=5, undo=False)
+        self.configure_undo_by_char(self.regex_txt)
         self.regex_txt.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
         self._bind_mousewheel_to_text(self.regex_txt)
 
@@ -758,8 +763,10 @@ class App:
         self.example_container.grid_remove()  # Скрыт по умолчанию
 
         # Поле ввода примера
-        self.example_text = tk.Text(self.example_container, width=TEXT_WIDTH, height=3)
+        self.example_text = tk.Text(self.example_container, width=TEXT_WIDTH, height=3, undo=False)
+        self.configure_undo_by_char(self.example_text)
         self.example_text.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.example_text.bind("<Key>", self.on_key_universal)
         self._bind_mousewheel_to_text(self.example_text)
 
         # Фрейм для выбора длины (для примера)
@@ -932,10 +939,205 @@ class App:
         return char in allowed_chars or char == ''  # Позволяем удаление символов
 
     def on_key(self, event):
-        if event.keysym in ('BackSpace', 'Delete'):  # Проверяем нажатие клавиш Backspace и Delete
-            return  # Разрешаем удаление
+        # Разрешаем служебные клавиши и комбинации с Ctrl
+        if event.keysym in ('BackSpace', 'Delete', 'Return', 'Tab', 'Escape'):
+            return  # Разрешаем удаление и навигацию
+
+        # Проверяем горячие клавиши с Ctrl
+        if event.state & 0x4:  # Ctrl нажат
+            keycode = event.keycode
+
+            if keycode == 67:  # Ctrl+C
+                self.copy_text()
+                return "break"
+            elif keycode == 86:  # Ctrl+V
+                self.paste_text()
+                # Добавляем разделитель после вставки
+                text_widget = self.root.focus_get()
+                if isinstance(text_widget, Text):
+                    try:
+                        text_widget.edit_separator()
+                    except:
+                        pass
+                return "break"
+            elif keycode == 88:  # Ctrl+X
+                self.cut_text()
+                return "break"
+            elif keycode == 65:  # Ctrl+A
+                self.select_all_text()
+                return "break"
+            elif keycode == 90:  # Ctrl+Z
+                self.undo_char_by_char()
+                return "break"
+            elif keycode == 89:  # Ctrl+Y
+                self.redo_text()
+                return "break"
+            else:
+                return "break"
+
+        # Для обычного ввода символов - добавляем разделитель
+        text_widget = self.root.focus_get()
+        if isinstance(text_widget, Text):
+            try:
+                text_widget.edit_separator()
+            except:
+                pass
+
+        # Разрешаем стрелки и Home/End
+        if event.keysym in ('Left', 'Right', 'Up', 'Down', 'Home', 'End', 'Prior', 'Next'):
+            return
+
+        # Обычная валидация символов
         if not self.validate_input(event.char):
             return "break"  # Блокируем ввод, если символ не разрешён
+
+    def on_key_universal(self, event):
+        """Универсальный обработчик для всех текстовых полей - с undo по символам"""
+        # Разрешаем Backspace и Delete
+        if event.keysym in ('BackSpace', 'Delete', 'Return', 'Tab', 'Escape'):
+            # Добавляем разделитель перед удалением
+            text_widget = self.root.focus_get()
+            if isinstance(text_widget, Text):
+                try:
+                    text_widget.edit_separator()
+                except:
+                    pass
+            return
+
+        # Разрешаем навигационные клавиши
+        if event.keysym in ('Left', 'Right', 'Up', 'Down', 'Home', 'End', 'Prior', 'Next'):
+            return
+
+        # Проверяем горячие клавиши с Ctrl
+        if event.state & 0x4:  # Ctrl нажат
+            keycode = event.keycode
+
+            if keycode == 67:  # Ctrl+C
+                self.copy_text()
+                return "break"
+            elif keycode == 86:  # Ctrl+V
+                self.paste_text()
+                # Добавляем разделитель после вставки
+                text_widget = self.root.focus_get()
+                if isinstance(text_widget, Text):
+                    try:
+                        text_widget.edit_separator()
+                    except:
+                        pass
+                return "break"
+            elif keycode == 88:  # Ctrl+X
+                self.cut_text()
+                return "break"
+            elif keycode == 65:  # Ctrl+A
+                self.select_all_text()
+                return "break"
+            elif keycode == 90:  # Ctrl+Z
+                self.undo_char_by_char()
+                return "break"
+            elif keycode == 89:  # Ctrl+Y
+                self.redo_text()
+                return "break"
+            else:
+                return "break"
+
+        # Для обычного ввода символов - добавляем разделитель
+        text_widget = self.root.focus_get()
+        if isinstance(text_widget, Text):
+            try:
+                text_widget.edit_separator()
+            except:
+                pass
+
+        # Разрешаем все символы
+        return
+
+    # Вспомогательные методы в класс App:
+
+    def copy_text(self):
+        """Копирует текст из активного поля"""
+        active_text_area = self.root.focus_get()
+        if isinstance(active_text_area, Text):
+            if active_text_area.tag_ranges("sel"):
+                selected_text = active_text_area.get("sel.first", "sel.last")
+                self.root.clipboard_clear()
+                self.root.clipboard_append(selected_text)
+
+
+    def paste_text(self):
+        """Вставляет текст из буфера в активное поле"""
+        active_text_area = self.root.focus_get()
+        if isinstance(active_text_area, Text):
+            clipboard_text = self.root.clipboard_get()
+            active_text_area.insert(tk.INSERT, clipboard_text)
+
+
+    def cut_text(self):
+        """Вырезает текст из активного поля"""
+        active_text_area = self.root.focus_get()
+        if isinstance(active_text_area, Text):
+            if active_text_area.tag_ranges("sel"):
+                selected_text = active_text_area.get("sel.first", "sel.last")
+                self.root.clipboard_clear()
+                self.root.clipboard_append(selected_text)
+                active_text_area.delete("sel.first", "sel.last")
+
+
+    def select_all_text(self):
+        """Выделяет весь текст в активном поле"""
+        active_text_area = self.root.focus_get()
+        if isinstance(active_text_area, Text):
+            active_text_area.tag_add("sel", "1.0", tk.END)
+            active_text_area.mark_set(tk.INSERT, "1.0")
+            active_text_area.see(tk.INSERT)
+            return "break"
+
+    def undo_char_by_char(self):
+        """Отменяет последнее действие (один символ или одно действие)"""
+        active_text_area = self.root.focus_get()
+        if isinstance(active_text_area, Text):
+            try:
+                # Пытаемся отменить последнее действие
+                active_text_area.edit_undo()
+            except tk.TclError:
+                pass
+
+    def redo_text(self):
+        """Повтор последнего действия"""
+        active_text_area = self.root.focus_get()
+        if isinstance(active_text_area, Text):
+            active_text_area.edit_redo()
+
+    def configure_undo_by_char(self, text_widget):
+        """Настраивает текстовое поле для отмены по одному символу"""
+        text_widget.configure(
+            undo=True,  # Включаем undo
+            autoseparators=False,  # Отключаем автоматические разделители
+            maxundo=1000  # Максимум операций для отмены
+        )
+
+        # Привязываем событие для ручного добавления разделителя после каждого символа
+        text_widget.bind("<Key>", self.on_key_with_undo, add=True)
+
+    def on_key_with_undo(self, event):
+        """Обработчик клавиш с ручным управлением undo"""
+        # Пропускаем служебные клавиши
+        if event.keysym in ('Shift_L', 'Shift_R', 'Control_L', 'Control_R', 'Alt_L', 'Alt_R'):
+            return
+
+        # Получаем активное текстовое поле
+        text_widget = self.root.focus_get()
+        if not isinstance(text_widget, Text):
+            return
+
+        # Добавляем разделитель перед вводом нового символа (кроме навигации)
+        if event.keysym not in ('Left', 'Right', 'Up', 'Down', 'Home', 'End', 'Prior', 'Next'):
+            try:
+                text_widget.edit_separator()
+            except:
+                pass
+
+
+
 
     # ------------------------------------------------------------------- работа с тектовыми потоками -------------------------------------------------------------------
 
@@ -1019,8 +1221,10 @@ class App:
             new_btn.grid(row=0, column=0, padx=5, pady=5)
 
             # Создаем текстовое поле
-            new_text_area = tk.Text(text_frame, width=60, height=8)
+            new_text_area = tk.Text(text_frame, width=60, height=8, undo=False)
+            self.configure_undo_by_char(new_text_area)
             new_text_area.grid(row=0, column=0, pady=5)
+            new_text_area.bind("<Key>", self.on_key_universal)
             if data['text_content']:
                 new_text_area.insert(tk.END, data['text_content'])
 
@@ -1030,8 +1234,10 @@ class App:
             new_text_area['yscrollcommand'] = new_scrollbar.set
 
             # Создаем поле для regex
-            new_text_reg = tk.Text(text_frame, width=60, height=3)
+            new_text_reg = tk.Text(text_frame, width=60, height=3, undo=False)
+            self.configure_undo_by_char(new_text_reg)
             new_text_reg.grid(row=1, column=0, pady=5)
+            new_text_area.bind("<Key>", self.on_key_universal)
             if data['reg_content']:
                 new_text_reg.insert(tk.END, data['reg_content'])
 
@@ -1210,8 +1416,10 @@ class App:
             new_btn.grid(row=0, column=0, padx=5, pady=5)
 
             # Создаем текстовое поле
-            new_text_area = tk.Text(text_frame, width=60, height=8)
+            new_text_area = tk.Text(text_frame, width=60, height=8, undo=False)
+            self.configure_undo_by_char(new_text_area)
             new_text_area.grid(row=0, column=0, pady=5)
+            new_text_area.bind("<Key>", self.on_key_universal)
             new_text_area.insert(tk.END, data['text_content'])
 
             # Создаем скроллбар
@@ -1220,8 +1428,10 @@ class App:
             new_text_area['yscrollcommand'] = new_scrollbar.set
 
             # Создаем поле для regex
-            new_text_reg = tk.Text(text_frame, width=60, height=3)
+            new_text_reg = tk.Text(text_frame, width=60, height=3, undo=False)
+            self.configure_undo_by_char(new_text_reg)
             new_text_reg.grid(row=1, column=0, pady=5)
+            new_text_area.bind("<Key>", self.on_key_universal)
             new_text_reg.insert(tk.END, data['reg_content'])
 
             # Создаем кнопку удаления
