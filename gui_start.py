@@ -1257,14 +1257,88 @@ class App:
         self.root.after(50, self._update_scroll_region)
 
     def print_tps(self):
-        # Выводим содержимое tps в консоль
-        for key, value in tps.items():
-            print(f"{key}: {value}")
+        """Выводит все текстовые потоки в файл"""
+        try:
+            # Создаем директорию для экспорта, если её нет
+            export_dir = "export_tps"
+            if not os.path.exists(export_dir):
+                os.makedirs(export_dir)
+
+            # Создаем имя файла с текущей датой и временем
+            current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = os.path.join(export_dir, f"tps_{current_datetime}.txt")
+
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write("=" * 80 + "\n")
+                f.write("ЭКСПОРТ ТЕКСТОВЫХ ПОТОКОВ (ТФ)\n")
+                f.write(f"Дата экспорта: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+
+                for key, value in tps.items():
+                    f.write(f"\n{'=' * 60}\n")
+                    f.write(f"ТЕКСТОВЫЙ ПОТОК: {key}\n")
+                    f.write(f"{'=' * 60}\n")
+
+                    # Получаем содержимое
+                    if isinstance(value, tk.Text):
+                        content = value.get("1.0", tk.END).strip()
+                    else:
+                        content = str(value).strip()
+
+                    f.write(content + "\n")
+                    f.write(f"\n{'-' * 60}\n")
+                    f.write(f"Количество символов: {len(content)}\n")
+
+                f.write(f"\n{'=' * 80}\n")
+                f.write(f"ВСЕГО ТЕКСТОВЫХ ПОТОКОВ: {len(tps)}\n")
+                f.write("=" * 80 + "\n")
+
+            messagebox.showinfo("Успех", f"Текстовые потоки успешно экспортированы в файл:\n{filename}")
+
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось экспортировать ТФ: {e}")
 
     def print_characteristics(self):
-        # Выводим содержимое characteristics в консоль
-        for key, value in characteristics.items():
-            print(f"{key}: {value}")
+        """Выводит все характеристики объекта в файл"""
+        try:
+            # Создаем директорию для экспорта, если её нет
+            export_dir = "export_characteristics"
+            if not os.path.exists(export_dir):
+                os.makedirs(export_dir)
+
+            # Создаем имя файла с текущей датой и временем
+            current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = os.path.join(export_dir, f"characteristics_{current_datetime}.txt")
+
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write("=" * 80 + "\n")
+                f.write("ЭКСПОРТ ХАРАКТЕРИСТИК ОБЪЕКТА\n")
+                f.write(f"Дата экспорта: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 80 + "\n\n")
+
+                # Сортируем ключи для удобства чтения
+                sorted_keys = sorted(characteristics.keys(), key=lambda x: int(x[1:]) if x[1:].isdigit() else 0)
+
+                for key in sorted_keys:
+                    value = characteristics[key]
+                    f.write(f"{key}: {value}\n")
+
+                f.write(f"\n{'=' * 80}\n")
+                f.write(f"ВСЕГО ХАРАКТЕРИСТИК: {len(characteristics)}\n")
+                f.write("=" * 80 + "\n")
+
+                # Добавляем статистику по длине характеристик
+                if characteristics:
+                    lengths = [len(str(v)) for v in characteristics.values()]
+                    f.write(f"\nСТАТИСТИКА:\n")
+                    f.write(f"  Минимальная длина: {min(lengths)} символов\n")
+                    f.write(f"  Максимальная длина: {max(lengths)} символов\n")
+                    f.write(f"  Средняя длина: {sum(lengths) / len(lengths):.1f} символов\n")
+
+            messagebox.showinfo("Успех", f"Характеристики успешно экспортированы в файл:\n{filename}")
+
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось экспортировать характеристики: {e}")
 
     # ------------------------------------------------------------------- СКРОЛ и КОНТЕКСТНОЕ МЕНЮ -------------------------------------------------------------------
 
@@ -1710,8 +1784,8 @@ create_menu.add_command(label="Добавить текстовый поток", 
 second_menu.add_cascade(label="Создание объекта", menu=create_menu)
 second_menu.add_cascade(label="Редактирование объекта", menu=editor_menu)
 second_menu.add_separator()
-second_menu.add_command(label="Вывести все ТФ объекта", command=app.print_tps)
-second_menu.add_command(label="Вывести все характеристики объекта", command=app.print_characteristics)
+second_menu.add_command(label="Сохранить все ТФ в файл", command=app.print_tps)
+second_menu.add_command(label="Сохранить все характеристики объекта в файл", command=app.print_characteristics)
 second_menu.add_separator()
 second_menu.add_command(label="Начать работу с новым объектом", command=restart_program)
 
