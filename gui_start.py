@@ -1661,11 +1661,37 @@ def select_object():
 
 
 def restart_program():
-    messagebox.showerror("Перезагрузка", f"Нажмите 'ОК' и дождитесь перезагрузки редактора")
-    current_script_path = Path(__file__).resolve()
-    subprocess.Popen([sys.executable, str(current_script_path)])
-    sys.exit()
+    """Перезапускает приложение через запуск нового процесса"""
+    response = messagebox.askyesno("Перезагрузка",
+                                   "Нажмите 'Да' для перезагрузки редактора.\n"
+                                   "Все несохранённые данные будут потеряны.")
+    if response:
+        try:
+            # Сохраняем путь к текущему скрипту
+            current_script_path = Path(__file__).resolve()
 
+            # Запускаем новый процесс
+            if sys.platform == 'win32':
+                # Настройка для скрытия консоли
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+
+                subprocess.Popen([sys.executable, str(current_script_path)],
+                                 startupinfo=startupinfo,
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                subprocess.Popen([sys.executable, str(current_script_path)])
+
+            # Даём время новому процессу на запуск
+            time.sleep(0.5)
+
+            # Завершаем текущий процесс
+            root.quit()
+            root.destroy()
+            sys.exit(0)
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось перезагрузить приложение: {e}")
 
 # ------------------------------------------------------------------- ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ -------------------------------------------------------------------
 
