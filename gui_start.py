@@ -403,6 +403,8 @@ class App:
         self.text_area = {}
         self.scrollbars = {}
         self.text_reg = {}
+        self.button_frames = {}  # Добавить
+        self.text_frames = {}  # Добавить
         self.transitions = None
 
         # Создаем Canvas и Scrollbar для левой панели
@@ -945,57 +947,120 @@ class App:
         self.add_tp()
 
     def add_tp(self):
-        # Создание имени для текущего ТФ
-        tp_name = f"ТФ {self.button_counter + 1}"
+        # Просто добавляем новый ТФ через перестроение всех
+        # Сначала сохраняем текущие данные
+        current_data = []
+        existing_keys = list(self.text_area.keys())
 
-        # Создаем фрейм для кнопок
-        self.button_frame = ttk.Frame(self.frame_tp)
-        self.button_frame.grid(row=self.button_counter + 1, column=1, padx=5, pady=5)
+        # Сортируем существующие
+        def get_number(name):
+            try:
+                return int(name.split()[1])
+            except:
+                return 0
 
-        # Создаем фрейм текстового поля и скролла
-        self.text_frame = ttk.Frame(self.frame_tp)
-        self.text_frame.grid(row=self.button_counter + 1, column=0, padx=5, pady=5)
+        existing_keys.sort(key=get_number)
 
-        # Создание новой кнопки "Загрузить ТФ" (активна всегда)
-        new_btn = ttk.Button(self.button_frame, text=f"Загрузить {tp_name}",
-                             command=lambda: self.load_tp(tp_name, new_btn, new_text_area), width=15)
-        new_btn.grid(row=0, column=0, padx=5, pady=5)
-        self.buttons[tp_name] = new_btn  # Сохраняем кнопку в словаре
+        for old_name in existing_keys:
+            text_widget = self.text_area[old_name]
+            text_content = text_widget.get("1.0", tk.END).strip()
+            reg_widget = self.text_reg[old_name]
+            reg_content = reg_widget.get("1.0", tk.END).strip()
 
-        # Создание нового текстового поля
-        new_text_area = tk.Text(self.text_frame, width=60, height=8)
-        new_text_area.grid(row=0, column=0, pady=5)
-        self.text_area[tp_name] = new_text_area
+            current_data.append({
+                'text_content': text_content,
+                'reg_content': reg_content
+            })
 
-        tps[tp_name] = new_text_area
+        # Добавляем пустой новый ТФ
+        current_data.append({
+            'text_content': "",
+            'reg_content': ""
+        })
 
-        # Создание нового скроллбара
-        new_scrollbar = ttk.Scrollbar(self.text_frame, orient="vertical", command=new_text_area.yview)
-        new_scrollbar.grid(row=0, column=1, sticky='ns')
-        new_text_area['yscrollcommand'] = new_scrollbar.set  # Привязка скроллбара к текстовому полю
+        # Очищаем все существующие виджеты
+        for old_name in existing_keys:
+            if old_name in self.buttons:
+                if self.buttons[old_name].winfo_exists():
+                    btn_frame = self.buttons[old_name].master
+                    if btn_frame.winfo_exists():
+                        btn_frame.destroy()
+            if old_name in self.text_area:
+                if self.text_area[old_name].winfo_exists():
+                    text_frame = self.text_area[old_name].master
+                    if text_frame.winfo_exists():
+                        text_frame.destroy()
 
-        # Создание нового текстового поля для регулярного выражения
-        new_text_reg = tk.Text(self.text_frame, width=60, height=3)
-        new_text_reg.grid(row=1, column=0, pady=5)
-        self.text_reg[tp_name] = new_text_reg
+        # Очищаем словари
+        global tps
+        tps = {}
+        self.buttons = {}
+        self.text_area = {}
+        self.text_reg = {}
+        self.scrollbars = {}
+        self.button_frames = {}
+        self.text_frames = {}
 
-        # Добавляем текстовое поле и скроллбар в словари
-        self.scrollbars[tp_name] = new_scrollbar
+        # Перестраиваем все ТФ с новыми данными
+        for idx, data in enumerate(current_data, start=1):
+            new_name = f"ТФ {idx}"
 
-        # Кнопка "Удалить"
-        delete_btn = ttk.Button(self.button_frame, text="Удалить",
-                                command=lambda: self.delete_tp(tp_name, new_text_area, new_btn, delete_btn,
-                                                               new_scrollbar, new_text_reg), width=15)
-        delete_btn.grid(row=1, column=0, padx=5, pady=5)
+            # Создаем фрейм для кнопок
+            button_frame = ttk.Frame(self.frame_tp)
+            button_frame.grid(row=idx, column=1, padx=5, pady=5)
 
-        # Привязываем контекстное меню
-        self.create_context_menu(new_text_area)
-        self._bind_scroll_to_widget(self.button_frame)
+            # Создаем фрейм текстового поля
+            text_frame = ttk.Frame(self.frame_tp)
+            text_frame.grid(row=idx, column=0, padx=5, pady=5)
 
-        # Увеличение счетчика
-        self.button_counter += 1
+            # Создаем кнопку
+            new_btn = ttk.Button(button_frame, text=f"Загрузить {new_name}",
+                                 width=15)
+            new_btn.grid(row=0, column=0, padx=5, pady=5)
 
-        # Обновляем область прокрутки
+            # Создаем текстовое поле
+            new_text_area = tk.Text(text_frame, width=60, height=8)
+            new_text_area.grid(row=0, column=0, pady=5)
+            if data['text_content']:
+                new_text_area.insert(tk.END, data['text_content'])
+
+            # Создаем скроллбар
+            new_scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=new_text_area.yview)
+            new_scrollbar.grid(row=0, column=1, sticky='ns')
+            new_text_area['yscrollcommand'] = new_scrollbar.set
+
+            # Создаем поле для regex
+            new_text_reg = tk.Text(text_frame, width=60, height=3)
+            new_text_reg.grid(row=1, column=0, pady=5)
+            if data['reg_content']:
+                new_text_reg.insert(tk.END, data['reg_content'])
+
+            # Создаем кнопку удаления
+            delete_btn = ttk.Button(button_frame, text="Удалить", width=15)
+            delete_btn.grid(row=1, column=0, padx=5, pady=5)
+
+            # Сохраняем в словари
+            self.buttons[new_name] = new_btn
+            self.text_area[new_name] = new_text_area
+            self.text_reg[new_name] = new_text_reg
+            self.scrollbars[new_name] = new_scrollbar
+            self.button_frames[new_name] = button_frame
+            self.text_frames[new_name] = text_frame
+
+            tps[new_name] = new_text_area
+
+            # Привязываем контекстное меню
+            self.create_context_menu(new_text_area)
+            self._bind_scroll_to_widget(button_frame)
+
+            # Настраиваем команды
+            new_btn.config(command=lambda name=new_name, btn=new_btn, text_area=new_text_area:
+            self.load_tp(name, btn, text_area))
+            delete_btn.config(command=lambda name=new_name, ta=new_text_area, lb=new_btn,
+                                             db=delete_btn, sb=new_scrollbar, tr=new_text_reg:
+            self.delete_tp(name, ta, lb, db, sb, tr))
+
+        self.button_counter = len(current_data)
         self.root.after(50, self._update_scroll_region)
 
     def load_tp(self, tp_name, button, new_text_area):
@@ -1021,22 +1086,175 @@ class App:
                 print("Ошибка при загрузке файла:", e)
 
     def delete_tp(self, tp_name, text_area, load_btn, delete_btn, scrollbar, text_reg):
-        # Удаляем текстовое поле, кнопки и скроллбар из интерфейса
-        text_area.destroy()
-        load_btn.destroy()
-        delete_btn.destroy()
-        scrollbar.destroy()  # Удаляем скроллбар
-        text_reg.destroy()
+        global tps
 
-        # Удаляем записи из словарей
+        # Удаляем записи из словарей (не уничтожая виджеты сразу)
         if tp_name in tps:
             del tps[tp_name]
         if tp_name in self.buttons:
             del self.buttons[tp_name]
         if tp_name in self.scrollbars:
             del self.scrollbars[tp_name]
+        if tp_name in self.text_area:
+            del self.text_area[tp_name]
+        if tp_name in self.text_reg:
+            del self.text_reg[tp_name]
+
+        # Уничтожаем виджеты
+        text_area.destroy()
+        load_btn.destroy()
+        delete_btn.destroy()
+        scrollbar.destroy()
+        text_reg.destroy()
+
+        # Уничтожаем фреймы, если они есть
+        if hasattr(self, 'button_frames') and tp_name in self.button_frames:
+            self.button_frames[tp_name].destroy()
+            del self.button_frames[tp_name]
+        if hasattr(self, 'text_frames') and tp_name in self.text_frames:
+            self.text_frames[tp_name].destroy()
+            del self.text_frames[tp_name]
+
+        # Перестраиваем оставшиеся элементы
+        self._rebuild_all_tps()
 
         print(f"{tp_name} успешно удален.")
+
+    def _rebuild_all_tps(self):
+        """Полностью перестраивает все ТФ с новыми именами и позициями"""
+        global tps
+
+        # Получаем все оставшиеся ТФ в правильном порядке
+        # Сортируем по существующим ключам в словарях
+        existing_keys = list(self.text_area.keys())
+
+        # Сортируем по номеру
+        def get_number(name):
+            try:
+                return int(name.split()[1])
+            except:
+                return 0
+
+        existing_keys.sort(key=get_number)
+
+        if not existing_keys:
+            self.button_counter = 0
+            # Очищаем все словари
+            tps = {}
+            self.buttons = {}
+            self.text_area = {}
+            self.text_reg = {}
+            self.scrollbars = {}
+            if hasattr(self, 'button_frames'):
+                self.button_frames = {}
+            if hasattr(self, 'text_frames'):
+                self.text_frames = {}
+            return
+
+        # Сохраняем содержимое ТФ
+        temp_data = []
+        for old_name in existing_keys:
+            # Получаем текстовое содержимое
+            text_widget = self.text_area[old_name]
+            text_content = text_widget.get("1.0", tk.END).strip()
+
+            # Получаем содержимое поля regex
+            reg_widget = self.text_reg[old_name]
+            reg_content = reg_widget.get("1.0", tk.END).strip()
+
+            temp_data.append({
+                'old_name': old_name,
+                'text_content': text_content,
+                'reg_content': reg_content
+            })
+
+            # Уничтожаем старые виджеты
+            if old_name in self.buttons:
+                if self.buttons[old_name].winfo_exists():
+                    # Уничтожаем кнопку и её родительский фрейм
+                    btn_frame = self.buttons[old_name].master
+                    if btn_frame.winfo_exists():
+                        btn_frame.destroy()
+
+            if old_name in self.text_area:
+                if self.text_area[old_name].winfo_exists():
+                    # Уничтожаем текстовое поле и его родительский фрейм
+                    text_frame = self.text_area[old_name].master
+                    if text_frame.winfo_exists():
+                        text_frame.destroy()
+
+        # Очищаем все словари
+        tps = {}
+        self.buttons = {}
+        self.text_area = {}
+        self.text_reg = {}
+        self.scrollbars = {}
+        self.button_frames = {}
+        self.text_frames = {}
+
+        # Создаем ТФ заново
+        for idx, data in enumerate(temp_data, start=1):
+            new_name = f"ТФ {idx}"
+
+            # Создаем фрейм для кнопок
+            button_frame = ttk.Frame(self.frame_tp)
+            button_frame.grid(row=idx, column=1, padx=5, pady=5)
+
+            # Создаем фрейм текстового поля
+            text_frame = ttk.Frame(self.frame_tp)
+            text_frame.grid(row=idx, column=0, padx=5, pady=5)
+
+            # Создаем кнопку
+            new_btn = ttk.Button(button_frame, text=f"Загрузить {new_name}",
+                                 width=15)
+            new_btn.grid(row=0, column=0, padx=5, pady=5)
+
+            # Создаем текстовое поле
+            new_text_area = tk.Text(text_frame, width=60, height=8)
+            new_text_area.grid(row=0, column=0, pady=5)
+            new_text_area.insert(tk.END, data['text_content'])
+
+            # Создаем скроллбар
+            new_scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=new_text_area.yview)
+            new_scrollbar.grid(row=0, column=1, sticky='ns')
+            new_text_area['yscrollcommand'] = new_scrollbar.set
+
+            # Создаем поле для regex
+            new_text_reg = tk.Text(text_frame, width=60, height=3)
+            new_text_reg.grid(row=1, column=0, pady=5)
+            new_text_reg.insert(tk.END, data['reg_content'])
+
+            # Создаем кнопку удаления
+            delete_btn = ttk.Button(button_frame, text="Удалить", width=15)
+            delete_btn.grid(row=1, column=0, padx=5, pady=5)
+
+            # Сохраняем в словари
+            self.buttons[new_name] = new_btn
+            self.text_area[new_name] = new_text_area
+            self.text_reg[new_name] = new_text_reg
+            self.scrollbars[new_name] = new_scrollbar
+            self.button_frames[new_name] = button_frame
+            self.text_frames[new_name] = text_frame
+
+            # Сохраняем в глобальный tps (для совместимости)
+            tps[new_name] = new_text_area
+
+            # Привязываем контекстное меню
+            self.create_context_menu(new_text_area)
+            self._bind_scroll_to_widget(button_frame)
+
+            # Настраиваем команды кнопок после создания всех объектов
+            new_btn.config(command=lambda name=new_name, btn=new_btn, text_area=new_text_area:
+            self.load_tp(name, btn, text_area))
+            delete_btn.config(command=lambda name=new_name, ta=new_text_area, lb=new_btn,
+                                             db=delete_btn, sb=new_scrollbar, tr=new_text_reg:
+            self.delete_tp(name, ta, lb, db, sb, tr))
+
+        # Обновляем счетчик
+        self.button_counter = len(temp_data)
+
+        # Обновляем область прокрутки
+        self.root.after(50, self._update_scroll_region)
 
     def print_tps(self):
         # Выводим содержимое tps в консоль
