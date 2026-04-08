@@ -352,6 +352,8 @@ tps = {}
 root = Tk()
 root.title("Редактор семантического объекта")
 
+root.state('zoomed')
+
 # Получаем размеры экрана
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
@@ -1947,6 +1949,73 @@ class App:
         else:
             messagebox.showwarning("Предупреждение", "Имя файла не может быть пустым.")
 
+    # ------------------------------------------------------------------- СБРОС СОСТОЯНИЯ ПРИЛОЖЕНИЯ -------------------------------------------------------------------
+
+    def reset_all(self):
+        """Полностью сбрасывает состояние приложения"""
+        global characteristics, tps, regex
+
+        # Очищаем глобальные переменные
+        characteristics = {}
+        tps = {}
+        regex = ""
+
+        # Очищаем поля
+        self.char_obj_txt.delete(1.0, tk.END)
+        self.name_obj_txt.delete(1.0, tk.END)
+        self.regex_txt.delete(1.0, tk.END)
+
+        self.metrics_txt.configure(state=tk.NORMAL)
+        self.metrics_txt.delete(1.0, tk.END)
+        self.metrics_txt.configure(state=tk.DISABLED)
+
+        self.categories_txt.configure(state=tk.NORMAL)
+        self.categories_txt.delete(1.0, tk.END)
+        self.categories_txt.configure(state=tk.DISABLED)
+
+        # Удаляем все ТФ
+        existing_keys = list(self.text_area.keys())
+        for old_name in existing_keys:
+            if old_name in self.buttons:
+                if self.buttons[old_name].winfo_exists():
+                    btn_frame = self.buttons[old_name].master
+                    if btn_frame.winfo_exists():
+                        btn_frame.destroy()
+            if old_name in self.text_area:
+                if self.text_area[old_name].winfo_exists():
+                    text_frame = self.text_area[old_name].master
+                    if text_frame.winfo_exists():
+                        text_frame.destroy()
+
+        # Очищаем словари
+        self.buttons = {}
+        self.text_area = {}
+        self.text_reg = {}
+        self.scrollbars = {}
+        self.button_frames = {}
+        self.text_frames = {}
+
+        # Сбрасываем счетчики
+        self.button_counter = 0
+        self.sync_q_counter()
+
+        # Сбрасываем другие переменные
+        self.transitions = None
+        if hasattr(self, 'dict_char'):
+            self.dict_char = None
+        if hasattr(self, 'scripts'):
+            self.scripts = []
+        if hasattr(self, 'tps_list'):
+            self.tps_list = []
+        self.current_index = 0
+
+        # Сбрасываем состояние кнопок на правой панели
+        self.button_save_obj.config(state=DISABLED)
+        self.button_plot_state_graph.config(state=DISABLED)
+        self.button_plot_char_graph.config(state=DISABLED)
+
+        # Обновляем область прокрутки
+        self.root.after(100, self._update_scroll_region)
 
 # ------------------------------------------------------------------- ГЛОБАЛЬНЫЕ ФУНКЦИИ -------------------------------------------------------------------
 
@@ -2028,38 +2097,32 @@ def select_object():
             app.text_area[last_key].delete(1.0, tk.END)
             app.text_area[last_key].insert(tk.INSERT, value)
 
+
 def restart_program():
-    """Перезапускает приложение через запуск нового процесса"""
-    response = messagebox.askyesno("Перезагрузка",
-                                   "Нажмите 'Да' для перезагрузки редактора.\n"
+    """Очищает все данные и возвращает приложение в первоначальное состояние"""
+    response = messagebox.askyesno("Новый объект",
+                                   "Начать работу с новым объектом?\n"
                                    "Все несохранённые данные будут потеряны.")
     if response:
-        try:
-            # Сохраняем путь к текущему скрипту
-            current_script_path = Path(__file__).resolve()
+        # Сбрасываем всё приложение
+        app.reset_all()
 
-            # Запускаем новый процесс
-            if sys.platform == 'win32':
-                # Настройка для скрытия консоли
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = subprocess.SW_HIDE
+        # Настраиваем меню - делаем доступными оба пункта
+        second_menu.entryconfig("Создание объекта", state="normal")
+        second_menu.entryconfig("Редактирование объекта", state="normal")
 
-                subprocess.Popen([sys.executable, str(current_script_path)],
-                                 startupinfo=startupinfo,
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
-                subprocess.Popen([sys.executable, str(current_script_path)])
+        # Также настраиваем подменю
+        editor_menu.entryconfig("Добавить текстовый поток", state="disabled")
+        editor_menu.entryconfig("Выбрать объект", state="normal")
 
-            # Даём время новому процессу на запуск
-            time.sleep(0.5)
+        # Сбрасываем глобальные переменные
+        global characteristics, tps, regex
+        characteristics = {}
+        tps = {}
+        regex = ""
 
-            # Завершаем текущий процесс
-            root.quit()
-            root.destroy()
-            sys.exit(0)
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось перезагрузить приложение: {e}")
+        messagebox.showinfo("Успех", "Создан новый объект. Можно начинать работу!")
+
 
 # ------------------------------------------------------------------- ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ -------------------------------------------------------------------
 
