@@ -1,16 +1,87 @@
 # Файл script.py
 import re
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Dict, Optional
+
+# Попробуем импортировать pymorphy3 для лемматизации
+try:
+    import pymorphy3
+
+    morph = pymorphy3.MorphAnalyzer()
+    LEMMATIZATION_AVAILABLE = True
+except ImportError:
+    print("Предупреждение: pymorphy3 не установлен. Лемматизация отключена.")
+    print("Установите: pip install pymorphy3")
+    LEMMATIZATION_AVAILABLE = False
+    morph = None
+
+# Кэш для хранения уже обработанных слов
+_lemma_cache: Dict[str, str] = {}
 
 
-# Вычисление значения семантической близости
-def semantic_similarity(sentence1, sentence2):
-    # Очищаем от знаков препинания и приводим к нижнему регистру
+def lemmatize_word(word: str) -> str:
+    """Лемматизация одного слова с кэшированием"""
+    if not LEMMATIZATION_AVAILABLE or morph is None:
+        return word.lower()
+
+    if word in _lemma_cache:
+        return _lemma_cache[word]
+
+    try:
+        lemma = morph.parse(word)[0].normal_form
+        _lemma_cache[word] = lemma
+        return lemma
+    except Exception:
+        _lemma_cache[word] = word.lower()
+        return word.lower()
+
+
+def lemmatize_text(text: str) -> str:
+    """Лемматизация текста - приведение слов к нормальной форме."""
+    if not LEMMATIZATION_AVAILABLE or morph is None:
+        return text.lower()
+
+    words = re.findall(r'\b\w+\b', text.lower())
+    lemmatized_words = []
+
+    for word in words:
+        lemma = lemmatize_word(word)
+        lemmatized_words.append(lemma)
+
+    return ' '.join(lemmatized_words)
+
+
+def remove_curator_prefix(text: str) -> str:
+    """
+    Удаляет префикс "Куратор:" из текста.
+    Пример: "Куратор: Привет!" -> "Привет!"
+    """
+    # Удаляем "Куратор:" в начале строки (с возможными пробелами)
+    text = re.sub(r'^Куратор:\s*', '', text, flags=re.IGNORECASE)
+    # Также удаляем "Куратор:" после знаков препинания
+    text = re.sub(r'[.!?]\s*Куратор:\s*', '. ', text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def semantic_similarity(sentence1, sentence2, use_lemmatization=True):
+    """
+    Вычисляет семантическую близость двух предложений.
+    Возвращает float от 0 до 1.
+    """
     import string
     translator = str.maketrans('', '', string.punctuation)
 
+    # Удаляем "Куратор:" из предложений перед обработкой
+    sentence1 = remove_curator_prefix(sentence1)
+    sentence2 = remove_curator_prefix(sentence2)
+
+    # Очищаем от знаков препинания
     clean_s1 = sentence1.lower().translate(translator)
     clean_s2 = sentence2.lower().translate(translator)
+
+    # Применяем лемматизацию
+    if use_lemmatization and LEMMATIZATION_AVAILABLE:
+        clean_s1 = lemmatize_text(clean_s1)
+        clean_s2 = lemmatize_text(clean_s2)
 
     # Разбиваем на слова
     tokens1 = set(clean_s1.split())
@@ -30,71 +101,124 @@ def semantic_similarity(sentence1, sentence2):
     return sem_prox
 
 
-# Улучшенная токенизация - сохраняем предложения целиком
 def tokenize(text):
-    # Разбиваем по .?! но НЕ удаляем знаки внутри предложения
+    """Разбивает текст на предложения"""
     sentences = re.split(r'[.!?]+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
     return sentences
 
 
-# Альтернативная токенизация - сохраняем знаки препинания
-def tokenize_advanced(text):
-    # Находим границы предложений, но не разрываем их
-    sentence_endings = re.compile(r'(?<=[.!?])\s+(?=[A-ZА-Я])')
-    sentences = sentence_endings.split(text)
-    return [s.strip() for s in sentences if s.strip()]
+def extract_scripts(text, character, threshold=0.6, use_lemmatization=True, verbose=True):
+    """
+    Извлекает сценарий из текста.
 
+    Args:
+        text: исходный текст
+        character: словарь {ключ: шаблон}
+        threshold: порог схожести (0-1)
+        use_lemmatization: использовать ли лемматизацию
+        verbose: выводить подробный отчет (если True)
 
-# Вычисление сценария с улучшенным сравнением
-def extract_scripts(text, character, threshold=0.6):
+    Returns:
+        sequence: список найденных ключей
+    """
     sentences = tokenize(text)
     sequence = []
+    results = []  # Для хранения деталей (используется только если verbose=True)
 
-    print(f"Разбито на предложения: {sentences}")
-    print(f"Порог схожести: {threshold}\n")
+    # Предварительно лемматизируем шаблоны для ускорения
+    lemmatized_patterns = {}
+    if use_lemmatization and LEMMATIZATION_AVAILABLE:
+        for key, pattern in character.items():
+            lemmatized_patterns[key] = lemmatize_text(pattern)
 
-    # Для каждого предложения проверяем, встречается ли характеристика
-    for sentence in sentences:
-
-        best_match = None
-        best_score = 0
+    for sent_idx, sentence in enumerate(sentences, 1):
+        best_score = 0.0
         best_key = None
 
-        for key, pattern in character.items():
-            # Сравниваем текущее предложение с паттерном
-            curr_sem_prox = semantic_similarity(pattern, sentence)
+        # Удаляем "Куратор:" из предложения для отображения в отчете
+        clean_sentence_for_display = remove_curator_prefix(sentence)
 
-            print(f"Сравнение: '{sentence[:50]}...' с '{pattern[:50]}...' -> {curr_sem_prox}")
+        # Лемматизируем предложение (с удаленным "Куратор:")
+        sentence_for_compare = remove_curator_prefix(sentence)
+        lemma_sentence = lemmatize_text(
+            sentence_for_compare) if use_lemmatization and LEMMATIZATION_AVAILABLE else sentence_for_compare.lower()
+
+        for key, pattern in character.items():
+            # Для шаблона тоже удаляем "Куратор:" на всякий случай
+            pattern_for_compare = remove_curator_prefix(pattern)
+
+            if use_lemmatization and LEMMATIZATION_AVAILABLE:
+                pattern_text = lemmatized_patterns[key]
+                sentence_text = lemma_sentence
+            else:
+                pattern_text = pattern_for_compare.lower()
+                sentence_text = sentence_for_compare.lower()
+
+            # Сравниваем
+            tokens1 = set(pattern_text.split())
+            tokens2 = set(sentence_text.split())
+
+            if len(tokens1) == 0 or len(tokens2) == 0:
+                curr_sem_prox = 0.0
+            else:
+                intersection = tokens1.intersection(tokens2)
+                union = tokens1.union(tokens2)
+                curr_sem_prox = round((len(intersection) / len(union)), 2)
 
             if curr_sem_prox > best_score:
                 best_score = curr_sem_prox
                 best_key = key
-                best_match = pattern
 
-        # Если лучшая схожесть превышает порог
         if best_score >= threshold:
-            print(f'*** СОВПАДЕНИЕ *** Предложение: "{sentence}"')
-            print(f'  Подходит под: "{best_match}" с оценкой {best_score}')
             sequence.append(best_key)
-        else:
-            print(f'Нет совпадений для: "{sentence}" (лучшая оценка: {best_score})')
-        print()
+
+        results.append({
+            'index': sent_idx,
+            'sentence': sentence,
+            'clean_sentence': clean_sentence_for_display,  # Оригинальное предложение без "Куратор:"
+            'best_key': best_key,
+            'best_score': best_score,
+            'passed': best_score >= threshold
+        })
+
+    # Если включен подробный вывод - печатаем отчет
+    if verbose:
+        print_results(results)
 
     return sequence
 
 
-# Построение словаря характеристик из сценариев
+def print_results(results):
+    """
+    Выводит результаты в формате, аналогичном примеру.
+
+    Args:
+        results: список словарей с результатами для каждого предложения
+    """
+    print("=" * 80)
+    print("ИТОГОВЫЙ СЦЕНАРИЙ")
+    print("=" * 80)
+
+    for result in results:
+        status = "✅" if result['passed'] else "❌"
+        key_display = result['best_key'] if result['best_key'] is not None else "None"
+        # Используем очищенное предложение для отображения (без "Куратор:")
+        sentence_display = result['clean_sentence'].replace('"', '\\"')
+        print(
+            f"{status} Предложение {result['index']}: \"{sentence_display}\" -> {key_display} (оценка: {result['best_score']})")
+
+    print("=" * 80)
+
+
 def build_dict_char(scripts):
-    # Получаем уникальные элементы всех скриптов для упрощения
+    """Построение словаря переходов между состояниями"""
     unique_elements = set()
     for script in scripts:
         unique_elements.update(script)
 
-    # Словарь для хранения множеств следования
     sequences = {elem: [] for elem in unique_elements}
 
-    # Смотрим на все комбинации в скриптах
     for i in range(len(scripts)):
         for j in range(len(scripts[i]) - 1):
             primary = scripts[i][j]
@@ -104,21 +228,21 @@ def build_dict_char(scripts):
     return sequences
 
 
-# Поиск списка первых элементов из каждого списка
 def get_start_elements(input_tuple: Tuple[List[Any], ...]) -> List[Any]:
+    """Получение первых элементов из каждого списка"""
     start_elements = []
     for lst in input_tuple:
-        if lst:  # Проверяем, не пустой ли список
+        if lst:
             if lst[0] not in start_elements:
-                start_elements.append(lst[0])  # Добавляем первый элемент в результат
+                start_elements.append(lst[0])
     return start_elements
 
 
-# Поиск списка последних элементов из каждого списка
 def get_finish_elements(input_tuple: Tuple[List[Any], ...]) -> List[Any]:
+    """Получение последних элементов из каждого списка"""
     finish_elements = []
     for lst in input_tuple:
-        if lst:  # Проверяем, не пустой ли список
+        if lst:
             if lst[-1] not in finish_elements:
-                finish_elements.append(lst[-1])  # Добавляем последний элемент в результат
+                finish_elements.append(lst[-1])
     return finish_elements
