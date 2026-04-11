@@ -1,91 +1,20 @@
-# Файл graph_metrics.py
-# Вычисление метрик графа и разделение характеристик по градации
+# graph_metrics.py
+
 import math
-
-
-# def calculate_graph_metrics(dict_char):
-#     """
-#     Вычисляет метрики графа на основе словаря характеристик.
-#
-#     Args:
-#         dict_char: Словарь характеристик {характеристика: [список_следующих]}
-#
-#     Returns:
-#         dict: Словарь с метриками:
-#             - vertices: количество вершин (уникальных характеристик)
-#             - edges: количество дуг (уникальные переходы)
-#             - density: плотность графа (edges / vertices)
-#             - complexity_score: оценка сложности (0.0 - 1.0)
-#     """
-#     if not dict_char:
-#         return {
-#             'vertices': 0,
-#             'edges': 0,
-#             'density': 0.0,
-#             'complexity_score': 0.0
-#         }
-#
-#     # Количество вершин (уникальных характеристик)
-#     vertices = len(dict_char)
-#
-#     # Количество дуг (уникальные переходы)
-#     # Сначала проверим структуру данных
-#     unique_edges = set()
-#
-#     for char, next_chars in dict_char.items():
-#         # Преобразуем next_chars в список, если это не список
-#         if not isinstance(next_chars, list):
-#             if next_chars:  # Если это не пустая строка или не None
-#                 next_chars = [next_chars]
-#             else:
-#                 next_chars = []
-#
-#         # Используем множество для удаления дубликатов в списке следующих характеристик
-#         unique_next_chars = set(next_chars)
-#         for next_char in unique_next_chars:
-#             if next_char:  # Игнорируем пустые значения
-#                 unique_edges.add((char, next_char))
-#
-#     edges = len(unique_edges)
-#
-#     # Плотность графа (отношение дуг к вершинам)
-#     # Для полного графа максимальная плотность = vertices * (vertices - 1)
-#     if vertices <= 1:
-#         max_possible_edges = 0
-#         density = 0.0
-#     else:
-#         max_possible_edges = vertices * (vertices - 1)
-#         density = edges / max_possible_edges if max_possible_edges > 0 else 0.0
-#
-#     # Оценка сложности на основе метрик
-#     # Нормализуем значения для получения оценки от 0.0 до 1.0
-#     # Используем комбинацию количества вершин, дуг и плотности
-#     # vertices_score = min(vertices / 10.0, 1.0)  # Нормализуем до 10 вершин
-#     # edges_score = min(edges / 20.0, 1.0)  # Нормализуем до 20 дуг
-#
-#     # Логарифмическая шкала — учитывает рост, но сглаживает
-#     vertices_score = min(math.log(vertices + 1) / math.log(50), 1.0)
-#     edges_score = min(math.log(edges + 1) / math.log(100), 1.0)
-#     density_score = density  # Уже нормализовано
-#
-#     # Взвешенная комбинация метрик
-#     complexity_score = (vertices_score * 0.3 + edges_score * 0.4 + density_score * 0.3)
-#     complexity_score = min(complexity_score, 1.0)  # Ограничиваем до 1.0
-#
-#     return {
-#         'vertices': vertices,
-#         'edges': edges,
-#         'density': round(density, 3),
-#         'complexity_score': round(complexity_score, 3)
-#     }
 
 
 def calculate_graph_metrics(dict_char):
     """
-    Вычисляет метрики графа с логарифмической нормализацией.
-    Сложность перестаёт расти после:
-        - 100 вершин
-        - 200 дуг
+    Вычисляет метрики графа.
+
+    МЕТРИКИ:
+    1. vertices — количество вершин (уникальных характеристик)
+    2. edges — количество уникальных переходов (дуг), включая петли
+    3. max_possible_edges — максимально возможное количество дуг
+       - Для ориентированного графа С петлями: vertices²
+       - Каждая вершина может иметь переход в саму себя
+    4. density — плотность графа = edges / max_possible_edges
+    5. complexity_score — общая сложность графа (от 0.0 до 1.0)
     """
     if not dict_char:
         return {
@@ -97,114 +26,140 @@ def calculate_graph_metrics(dict_char):
 
     vertices = len(dict_char)
 
-    # Количество дуг (уникальные переходы)
+    # === 1. Количество уникальных переходов (дуг), ВКЛЮЧАЯ ПЕТЛИ ===
     unique_edges = set()
     for char, next_chars in dict_char.items():
         if not isinstance(next_chars, list):
             next_chars = [next_chars] if next_chars else []
         for next_char in set(next_chars):
-            if next_char:
+            if next_char:  # Игнорируем пустые значения
                 unique_edges.add((char, next_char))
     edges = len(unique_edges)
 
-    # Плотность (как раньше)
-    if vertices <= 1:
-        density = 0.0
+    # === 2. Максимально возможное количество дуг С УЧЁТОМ ПЕТЕЛЬ ===
+    # Для ориентированного графа, где разрешены петли (переход в себя):
+    # каждая из vertices вершин может иметь переход в любую из vertices вершин
+    # включая саму себя → vertices × vertices = vertices²
+    max_possible_edges = vertices * vertices if vertices > 0 else 0
+
+    # === 3. Плотность графа ===
+    # Показывает, какая доля возможных связей реально существует
+    # Пример: 54 вершины → максимум 2916 дуг (включая петли)
+    # Если дуг 54 → плотность = 54/2916 = 0.0185 (1.85%)
+    if max_possible_edges > 0:
+        density = edges / max_possible_edges
     else:
-        max_possible_edges = vertices * (vertices - 1)
-        density = edges / max_possible_edges if max_possible_edges > 0 else 0.0
+        density = 0.0
 
-    # Логарифмическая нормализация
-    # Сложность растёт до 100 вершин и 200 дуг
-    V_THRESHOLD = 100
-    E_THRESHOLD = 200
+    # === 4. Нормированные метрики ===
+    def logistic_norm(x, midpoint=50, steepness=0.05):
+        return 1 / (1 + math.exp(-steepness * (x - midpoint)))
 
-    vertices_score = min(math.log(vertices + 1) / math.log(V_THRESHOLD), 1.0)
-    edges_score    = min(math.log(edges + 1)    / math.log(E_THRESHOLD), 1.0)
-    density_score  = density
+    vertices_score = logistic_norm(vertices, midpoint=50, steepness=0.05)
+    edges_score = logistic_norm(edges, midpoint=100, steepness=0.03)
+    density_score = density
 
-    # Взвешенная сложность
-    complexity_score = (vertices_score * 0.4 +
-                        edges_score    * 0.5 +
-                        density_score  * 0.1)
+    # === 5. Итоговая сложность ===
+    complexity_score = (vertices_score * 0.3 +
+                        edges_score * 0.5 +
+                        density_score * 0.2)
 
-    complexity_score = min(complexity_score, 1.0)
+    complexity_score = min(max(complexity_score, 0.0), 1.0)
 
     return {
         'vertices': vertices,
         'edges': edges,
-        'density': round(density, 3),
-        'complexity_score': round(complexity_score, 3)
+        'density': round(density, 4),
+        'complexity_score': round(complexity_score, 4)
     }
+
+
+def calculate_local_complexity(char, next_chars, total_vertices):
+    """
+    Вычисляет локальную сложность для одной характеристики.
+
+    Локальная сложность = количество исходящих дуг / максимально возможное количество
+
+    Максимально возможное количество исходящих дуг ДЛЯ ОДНОЙ ВЕРШИНЫ:
+    - Если разрешены петли: total_vertices (может перейти в себя + во все другие)
+    - Если петли запрещены: total_vertices - 1
+
+    В нашем случае петли разрешены, поэтому используем total_vertices.
+
+    Args:
+        char: Название характеристики
+        next_chars: Список следующих характеристик
+        total_vertices: Общее количество вершин в графе
+
+    Returns:
+        float: Локальная сложность от 0.0 до 1.0
+    """
+    if not isinstance(next_chars, list):
+        next_chars = [next_chars] if next_chars else []
+
+    unique_targets = set(next_chars)
+    out_degree = len(unique_targets)
+
+    # Максимально возможное количество исходящих дуг из одной вершины
+    # (с учётом петель — может перейти в саму себя)
+    max_possible = total_vertices
+
+    if max_possible <= 0:
+        return 0.0
+
+    return out_degree / max_possible
 
 
 def categorize_characteristics(dict_char, gradation_type='simple'):
     """
-    Разделяет характеристики на категории по метрикам графа.
+    Разделяет характеристики на категории по локальной сложности.
 
-    Args:
-        dict_char: Словарь характеристик {характеристика: [список_следующих]}
-        gradation_type: Тип градации ('simple' или 'detailed')
-            - 'simple': (0.5, 0.75, 1.0)
-            - 'detailed': (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
-
-    Returns:
-        dict: Словарь с категориями характеристик:
-            - categories: {категория: [список_характеристик]}
-            - metrics: метрики графа
-            - gradation: использованная градация
+    Типы градации:
+    - 'simple': шаг 0.25 → [0.25, 0.5, 0.75, 1.0]
+    - 'detailed': шаг 0.1 → [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     """
     metrics = calculate_graph_metrics(dict_char)
-    complexity = metrics['complexity_score']
+    total_vertices = metrics['vertices']
 
-    # Определяем градацию
+    # === НОВЫЕ ТИПЫ ГРАДАЦИИ ===
     if gradation_type == 'simple':
-        gradation = [0.5, 0.75, 1.0]
+        # Простая градация: через 0.25 от 0 до 1
+        gradation = [0.25, 0.5, 0.75, 1.0]
     else:  # detailed
-        gradation = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        # Детальная градация: через 0.1 от 0 до 1
+        gradation = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
-    # Определяем категорию для каждой характеристики
     categories = {}
 
     for char, next_chars in dict_char.items():
-        # Преобразуем next_chars в список, если это не список
         if not isinstance(next_chars, list):
-            if next_chars:  # Если это не пустая строка или не None
-                next_chars = [next_chars]
-            else:
-                next_chars = []
+            next_chars = [next_chars] if next_chars else []
 
-        # Вычисляем локальную метрику для характеристики
-        # Количество уникальных исходящих дуг
-        local_edges = len(set(next_chars))
-        max_local_edges = len(dict_char) - 1  # Максимум возможных переходов
+        unique_targets = set(next_chars)
+        local_edges = len(unique_targets)
 
-        if max_local_edges > 0:
-            local_density = local_edges / max_local_edges
-        else:
-            local_density = 0.0
+        # Локальная сложность с учётом петель
+        local_complexity = calculate_local_complexity(char, next_chars, total_vertices)
+        local_complexity = round(local_complexity, 3)
 
-        # Комбинируем глобальную и локальную метрики
-        local_complexity = (complexity * 0.6 + local_density * 0.4)
-
-        # Определяем категорию на основе градации
+        # Определяем категорию
         category = None
         for threshold in gradation:
             if local_complexity <= threshold:
                 category = f"{threshold:.2f}"
                 break
 
-        # Если не попали ни в одну категорию, относим к максимальной
         if category is None:
             category = f"{gradation[-1]:.2f}"
 
         if category not in categories:
             categories[category] = []
+
         categories[category].append({
             'char': char,
-            'next_chars': next_chars,
+            'next_chars': list(unique_targets),
             'local_edges': local_edges,
-            'local_complexity': round(local_complexity, 3)
+            'local_complexity': local_complexity
         })
 
     return {
@@ -215,19 +170,9 @@ def categorize_characteristics(dict_char, gradation_type='simple'):
 
 
 def get_characteristics_by_category(dict_char, gradation_type='simple'):
-    """
-    Возвращает характеристики, разделенные по категориям с метриками.
-
-    Args:
-        dict_char: Словарь характеристик
-        gradation_type: Тип градации ('simple' или 'detailed')
-
-    Returns:
-        dict: Структурированные данные для отображения
-    """
+    """Возвращает характеристики, разделенные по категориям."""
     result = categorize_characteristics(dict_char, gradation_type)
 
-    # Форматируем результат для удобного отображения
     formatted_categories = {}
     for category, chars in result['categories'].items():
         formatted_categories[category] = {
@@ -243,3 +188,45 @@ def get_characteristics_by_category(dict_char, gradation_type='simple'):
         'total_vertices': result['metrics']['vertices'],
         'total_edges': result['metrics']['edges']
     }
+
+
+def explain_metrics():
+    """Возвращает пояснение метрик."""
+    explanation = """
+
+ ОСНОВНЫЕ МЕТРИКИ:
+
+   1. Вершины — количество уникальных характеристик в графе.
+
+   2. Дуги — количество уникальных переходов между характеристиками.
+      Петли (переход из вершины в саму себя) УЧИТЫВАЮТСЯ.
+
+   3. Максимально возможное количество дуг = Вершины²
+      (каждая вершина может иметь переход в любую вершину, включая себя)
+
+   4. Плотность = Дуги / (Вершины²)
+      - 0.00 → нет связей между характеристиками
+      - 0.50 → половина возможных связей присутствует
+      - 1.00 → полносвязный граф (есть все возможные переходы, включая петли)
+
+   5. Оценка сложности (complexity_score) — от 0.0 до 1.0
+      Формула: vertices_score × 0.3 + edges_score × 0.5 + density_score × 0.2
+
+ ЛОКАЛЬНАЯ СЛОЖНОСТЬ (для каждой характеристики):
+
+   Локальная сложность = исходящие_дуги / Вершины
+
+   Пример: если в графе 54 вершины, максимум исходящих дуг из одной вершины = 54
+   (включая возможный переход в саму себя)
+
+   - 0 исходящих дуг → локальная сложность = 0.000
+   - 1 исходящая дуга → локальная сложность = 1/54 = 0.019
+   - 27 исходящих дуг → локальная сложность = 27/54 = 0.500
+   - 54 исходящие дуги → локальная сложность = 1.000
+
+ ТИПЫ ГРАДАЦИИ:
+
+   - Простая (simple): категории через 0.25 → 0.25, 0.50, 0.75, 1.00
+   - Детальная (detailed): категории через 0.1 → 0.1, 0.2, 0.3, ..., 1.0
+"""
+    return explanation
