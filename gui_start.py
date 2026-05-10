@@ -1536,7 +1536,7 @@ class App:
                 f.write(f"ВСЕГО ТЕКСТОВЫХ ПОТОКОВ: {len(tps)}\n")
                 f.write("=" * 80 + "\n")
 
-            messagebox.showinfo("Успех", f"Текстовые потоки успешно экспортированы в файл:\n{filename}")
+            messagebox.showinfo("Успех", f"Текстовые фрагменты успешно экспортированы в файл:\n{filename}")
 
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось экспортировать ТФ: {e}")
@@ -1752,7 +1752,7 @@ class App:
 
         if not tps or len(tps) == 0:
             messagebox.showwarning("Предупреждение",
-                                   "Нет текстовых потоков для обработки. Пожалуйста, добавьте хотя бы один текстовый поток.")
+                                   "Нет текстовых фрагментов для обработки. Пожалуйста, добавьте хотя бы один текстовый фрагмент.")
             return
 
         if not characteristics or len(characteristics) == 0:
@@ -1791,7 +1791,7 @@ class App:
                 self.text_reg[key].insert(tk.INSERT, " ".join(script))
                 self.scripts.append(script)  # ✅ Добавляем в self.scripts
             else:
-                print(f"Пропущен пустой текстовый поток: {key}")
+                print(f"Пропущен пустой текстовый фрагмент: {key}")
 
             self.current_index += 1
 
@@ -2112,7 +2112,7 @@ def select_object():
     file_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
 
     second_menu.entryconfig("Создание объекта", state="disable")
-    editor_menu.entryconfig("Добавить текстовый поток", state="normal")
+    editor_menu.entryconfig("Добавить текстовый фрагмент", state="normal")
     editor_menu.entryconfig("Выбрать объект", state="disable")
 
     if file_path:
@@ -2197,7 +2197,7 @@ def restart_program():
         second_menu.entryconfig("Редактирование объекта", state="normal")
 
         # Также настраиваем подменю
-        editor_menu.entryconfig("Добавить текстовый поток", state="disabled")
+        editor_menu.entryconfig("Добавить текстовый фрагмент", state="disabled")
         editor_menu.entryconfig("Выбрать объект", state="normal")
 
         # Сбрасываем глобальные переменные
@@ -2219,9 +2219,9 @@ create_menu = Menu(second_menu)
 editor_menu = Menu()
 
 editor_menu.add_command(label="Выбрать объект", command=select_object)
-editor_menu.add_command(label="Добавить текстовый поток", command=app.add_tp, state=DISABLED)
+editor_menu.add_command(label="Добавить текстовый фрагмент", command=app.add_tp, state=DISABLED)
 
-create_menu.add_command(label="Добавить текстовый поток", command=app.add_tp_new)
+create_menu.add_command(label="Добавить текстовый фрагмент", command=app.add_tp_new)
 
 second_menu.add_cascade(label="Создание объекта", menu=create_menu)
 second_menu.add_cascade(label="Редактирование объекта", menu=editor_menu)
