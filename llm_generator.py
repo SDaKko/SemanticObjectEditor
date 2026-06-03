@@ -1,16 +1,13 @@
 # llm_generator.py
 import uuid
-
 import requests
 import base64
 import os
 from dotenv import load_dotenv
 import time
-from typing import Literal
 
 # Загружаем переменные окружения
 load_dotenv()
-
 
 class LLMGenerator:
     def __init__(self):
@@ -32,10 +29,10 @@ class LLMGenerator:
     def _ensure_token(self) -> bool:
         """Обновляет токен ТОЛЬКО если он отсутствует или почти истёк"""
         if not self.token or self._is_token_expired():
-            print("🔄 Токен устарел или отсутствует. Запрашиваю новый...")
+            print("Токен устарел или отсутствует. Запрашиваю новый...")
             success = self.get_token()
             if not success:
-                print("❌ Не удалось обновить токен.")
+                print("Не удалось обновить токен.")
             return success
         return True
 
@@ -47,7 +44,7 @@ class LLMGenerator:
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept": "application/json",
-            "RqUID": str(uuid.uuid4()),  # ✅ Уникальный ID для каждого запроса
+            "RqUID": str(uuid.uuid4()),  # Уникальный ID для каждого запроса
             "Authorization": f"Basic {encoded_auth}"
         }
 
@@ -65,7 +62,7 @@ class LLMGenerator:
                 result = response.json()
                 self.token = result.get("access_token")
                 self.token_expires_at = time.time() + 1740  # 29 минут
-                print("✅ Токен успешно получен!")
+                print("Токен успешно получен!")
                 return True
             else:
                 print(f"[Ошибка получения токена] {response.status_code}: {response.text}")
@@ -74,9 +71,12 @@ class LLMGenerator:
             print(f"[Ошибка подключения]: {e}")
             return False
 
+    def is_available(self) -> bool:
+        """Проверяет, доступен ли API (без траты токенов)"""
+        return self.token is not None and not self._is_token_expired()
 
     def generate(self, prompt: str, temperature=0.8, max_tokens=600) -> str:
-        """Генерация текста — с автоматическим обновлением токена"""
+        """Генерация текста с автоматическим обновлением токена"""
         if not self._ensure_token():
             return "[Ошибка] Не удалось получить токен."
 
@@ -84,13 +84,13 @@ class LLMGenerator:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.token}",
-            "RqUID": str(uuid.uuid4())  # ✅ Каждый запрос — уникальный RqUID
+            "RqUID": str(uuid.uuid4())  # Каждый запрос - уникальный RqUID
         }
 
         payload = {
             "model": "GigaChat",
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": temperature,  # ✅ Высокая температура = больше креативности
+            "temperature": temperature,  # Высокая температура = больше креативности
             "max_tokens": max_tokens,
             "stream": False
         }
@@ -118,21 +118,21 @@ class LLMGenerator:
         """
         styles = {
             "манипулятивный": (
-                "Один из собеседников — проводник в психологической игре. "
+                "Один из собеседников - проводник в психологической игре. "
                 "Он говорит коротко, жёстко, с элементами давления и одобрения. "
                 "Он использует фразы: 'Слабые здесь не задерживаются', 'Ты двигаешься в правильном направлении', 'Подумай, зачем ты вообще живёшь'."
             ),
             "терапевтический": (
-                "Один из собеседников — терапевт. Он говорит мягко, поддерживающе, он задаёт вопросы. "
+                "Один из собеседников - терапевт. Он говорит мягко, поддерживающе, он задаёт вопросы. "
                 "Фокус на осознании: 'Что тебя тревожит?', 'Хочешь изменить свою жизнь?', 'Ты нужен мне, чтобы пройти это'."
             ),
             "загадочный": (
-                "Один из собеседников — лидер закрытого сообщества. Он говорит с ощущением тайны, контроля, избранности. "
+                "Один из собеседников - лидер закрытого сообщества. Он говорит с ощущением тайны, контроля, избранности. "
                 "Фразы: 'Я знаю, где ты, и слежу за тобой', 'Назад пути нет', 'Ты почти у цели'."
             ),
             "провокационный": (
                 "Один из собеседников провоцирует на действия. Он говорит дерзко, вызывающе. "
-                "Пример: 'Если не сделаешь — я найду тебя', 'Сделай что-то необычное', 'Страшно? Это часть пути'."
+                "Пример: 'Если не сделаешь - я найду тебя', 'Сделай что-то необычное', 'Страшно? Это часть пути'."
             )
         }
 
@@ -176,7 +176,7 @@ class LLMGenerator:
         }.get(length, "5–7 пар")
 
         full_prompt = f"""
-        Ты — мастер генерации диалогов. Проанализируй стиль следующего диалога:
+        Ты - мастер генерации диалогов. Проанализируй стиль следующего диалога:
 
         "{example_text.strip()}"
 

@@ -1,9 +1,7 @@
-# graph.py — с оптимизацией графа состояний (объединение эквивалентных состояний)
+# graph.py - с оптимизацией графа состояний (объединение эквивалентных состояний)
 
 import networkx as nx
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrowPatch
-import matplotlib.patches as mpatches
 from collections import defaultdict
 
 
@@ -248,12 +246,7 @@ def optimize_state_graph(transitions):
 
 def plot_state_graph(transitions, filename="state_graph.png", optimize=True):
     """
-    Строит граф состояний
-
-    Args:
-        transitions: словарь переходов
-        filename: имя файла для сохранения
-        optimize: если True, выполняет оптимизацию (объединение эквивалентных состояний)
+    Строит граф состояний. Если optimize=True, выполняет оптимизацию (объединение эквивалентных состояний)
     """
     # Оптимизируем граф если нужно
     if optimize:

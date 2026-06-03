@@ -1,21 +1,15 @@
 from tkinter import *
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, Toplevel
-from PIL import Image, ImageTk
+from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
-from pathlib import Path
 import script as script_module
 from regex import *
-import data, json, sys, os, subprocess, time
+import json
 import transitions_builder
 import graph_metrics
-from tkinter import simpledialog
 import graph
 import re
-from dotenv import load_dotenv
 import os
-
-
 
 # Проверка наличия llm_generator.py
 # --- ПОДКЛЮЧЕНИЕ GIGACHAT ---
@@ -28,14 +22,13 @@ try:
     generator = LLMGenerator()  # Автоматически получит токен
 
     # Проверка соединения
-    test_response = generator.generate("Привет", max_tokens=5)
-    if "Ошибка" not in test_response:
+    if generator.is_available():
         LLM_AVAILABLE = True
-        print("✅ GigaChat успешно подключена!")
+        print("GigaChat успешно подключена!")
     else:
-        print("❌ Ошибка GigaChat:", test_response)
+        print("Ошибка: GigaChat недоступна (токен не получен или истёк)")
 except Exception as e:
-    print("❌ GigaChat не загружена:", e)
+    print("GigaChat не загружена:", e)
 
 
 
@@ -393,13 +386,6 @@ class App:
         self.button_counter = 0
         self.is_scrolling_text = False  # Флаг для отслеживания прокрутки текста
         self.scroll_timer = None  # Таймер для сброса флага
-
-        # if characteristics:
-        #     last_key = next(reversed(characteristics.keys()))
-        #     last_num = int(last_key[1:])
-        #     self.q_counter = last_num + 1
-        # else:
-        #     self.q_counter = 1
 
         self.sync_q_counter()
 
@@ -923,9 +909,6 @@ class App:
 
     def save_changes(self, show_confirmation=True):
         """Сохраняет характеристики из текстового поля в словарь
-
-        Args:
-            show_confirmation: Показывать ли диалог подтверждения
         """
         if show_confirmation and not self.confirm_action():
             return False
@@ -1168,9 +1151,6 @@ class App:
                 text_widget.edit_separator()
             except:
                 pass
-
-
-
 
     # ------------------------------------------------------------------- работа с тектовыми потоками -------------------------------------------------------------------
 
@@ -1656,30 +1636,6 @@ class App:
 
     # ------------------------------------------------------------------- РАБОТА С ТЕКСТОМ -------------------------------------------------------------------
 
-    def copy_text(self):
-        # Получаем текущее активное текстовое поле
-        active_text_area = self.root.focus_get()
-        if isinstance(active_text_area, Text):
-            try:
-                # Проверяем, есть ли выделенный текст
-                if active_text_area.tag_ranges("sel"):
-                    selected_text = active_text_area.get("sel.first", "sel.last")  # Получаем выделенный текст
-                    self.root.clipboard_clear()  # Очищаем буфер обмена
-                    self.root.clipboard_append(selected_text)  # Добавляем выделенный текст в буфер обмена
-                    print("Текст скопирован:", selected_text)  # Для отладки
-            except tk.TclError:
-                pass  # Игнорируем ошибку, если ничего не выделено
-
-    def paste_text(self):
-        # Получаем текущее активное текстовое поле
-        active_text_area = self.root.focus_get()
-        if isinstance(active_text_area, Text):
-            try:
-                # Вставляем текст из буфера обмена
-                active_text_area.insert(tk.INSERT, self.root.clipboard_get())
-            except tk.TclError:
-                pass  # Игнорируем ошибку, если буфер обмена пуст
-
     def insert_regex(self, regex):
         """Вставляет регулярное выражение в текстовое поле"""
         try:
@@ -1789,7 +1745,7 @@ class App:
                 print(f"Последовательность хар-к {key}: ", script)
                 # self.text_area[key].delete(1.0, tk.END)
                 self.text_reg[key].insert(tk.INSERT, " ".join(script))
-                self.scripts.append(script)  # ✅ Добавляем в self.scripts
+                self.scripts.append(script)  # Добавляем в self.scripts
             else:
                 print(f"Пропущен пустой текстовый фрагмент: {key}")
 
@@ -1800,7 +1756,7 @@ class App:
 
         else:
             # Все ТФ обработаны → завершаем
-            self.finish_generation()  # ✅ Передаём данные дальше
+            self.finish_generation()  # Передаём данные дальше
 
     def finish_generation(self):
         """Завершает генерацию после обработки всех ТФ"""

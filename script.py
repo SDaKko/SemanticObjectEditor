@@ -1,8 +1,7 @@
 # Файл script.py
 import re
-from typing import List, Tuple, Any, Dict, Optional
+from typing import List, Tuple, Any, Dict
 
-# Попробуем импортировать pymorphy3 для лемматизации
 try:
     import pymorphy3
 
@@ -111,16 +110,6 @@ def tokenize(text):
 def extract_scripts(text, character, threshold=0.6, use_lemmatization=True, verbose=True):
     """
     Извлекает сценарий из текста.
-
-    Args:
-        text: исходный текст
-        character: словарь {ключ: шаблон}
-        threshold: порог схожести (0-1)
-        use_lemmatization: использовать ли лемматизацию
-        verbose: выводить подробный отчет (если True)
-
-    Returns:
-        sequence: список найденных ключей
     """
     sentences = tokenize(text)
     sequence = []
@@ -191,17 +180,14 @@ def extract_scripts(text, character, threshold=0.6, use_lemmatization=True, verb
 
 def print_results(results):
     """
-    Выводит результаты в формате, аналогичном примеру.
-
-    Args:
-        results: список словарей с результатами для каждого предложения
+    Выводит результаты
     """
     print("=" * 80)
     print("ИТОГОВЫЙ СЦЕНАРИЙ")
     print("=" * 80)
 
     for result in results:
-        status = "✅" if result['passed'] else "❌"
+        status = "OK" if result['passed'] else "NO"
         key_display = result['best_key'] if result['best_key'] is not None else "None"
         # Используем очищенное предложение для отображения (без "Куратор:")
         sentence_display = result['clean_sentence'].replace('"', '\\"')

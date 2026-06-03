@@ -1,11 +1,10 @@
 # transitions_builder.py
 
-from graph import optimize_state_graph  # Добавить импорт в начало файла
+from graph import optimize_state_graph
 
 transitions = {}
 state_counter = -1
 scripts = []  # Будем получать извне
-
 
 def get_new_state_name():
     global state_counter
@@ -16,14 +15,6 @@ def get_new_state_name():
 def build_transitions(start_edges, input_scripts, optimize=True):
     """
     Строит граф переходов между состояниями.
-
-    Args:
-        start_edges: Список начальных характеристик
-        input_scripts: Список сценариев
-        optimize: Если True, выполняет оптимизацию графа (объединение эквивалентных состояний)
-
-    Returns:
-        dict: Словарь переходов (оптимизированный, если optimize=True)
     """
     global state_counter, scripts
     scripts = input_scripts

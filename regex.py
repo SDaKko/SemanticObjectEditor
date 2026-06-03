@@ -1,19 +1,11 @@
-# regex.py — упрощённая версия (без оптимизации внутри)
+# regex.py
 
 import re
-
-
-# Удаляем: from graph import optimize_state_graph
-
-
 def build_regex(state, transitions_dict, visited=None, memo=None, depth=0):
     """
     Строит регулярное выражение из графа состояний.
-
-    ВНИМАНИЕ: transitions_dict должен быть УЖЕ ОПТИМИЗИРОВАН!
+    transitions_dict должен быть УЖЕ ОПТИМИЗИРОВАН!
     """
-    # Удалено: transitions_dict = optimize_state_graph(transitions_dict)
-    # Удалено: find_equivalent_state() — состояния уже корректны
 
     if visited is None:
         visited = set()
@@ -112,11 +104,6 @@ def build_regex(state, transitions_dict, visited=None, memo=None, depth=0):
     memo[state] = result
     return result
 
-
-# Функции merge_branches, find_common_token_prefix, find_common_prefix,
-# simplify_expression остаются без изменений
-# (они не зависят от оптимизации)
-
 def merge_branches(branches):
     """Объединяет ветви с общим префиксом"""
     if len(branches) <= 1:
@@ -161,22 +148,6 @@ def merge_branches(branches):
 def find_common_prefix(strings):
     """
     Находит общий префикс для всех строк на уровне токенов.
-
-    Args:
-        strings: Список строк (регулярных выражений)
-
-    Returns:
-        Общий префикс как строку, или "" если нет общего префикса
-
-    Примеры:
-         find_common_prefix(["q1q2", "q1q3"])
-        "q1"
-
-        find_common_prefix(["q10q2", "q11q2"])
-        ""
-
-        find_common_prefix(["q1(q2|q3)", "q1(q2|q4)"])
-        "q1(q2|"
     """
     if not strings:
         return ""
