@@ -65,9 +65,7 @@ def build_transitions(start_edges, input_scripts, optimize=True):
 
     # Оптимизация графа (ОДИН РАЗ здесь)
     if optimize:
-        print("Выполняется оптимизация графа...")
         result = optimize_state_graph(transitions)
-        print("Оптимизация завершена")
         return result
 
     return transitions

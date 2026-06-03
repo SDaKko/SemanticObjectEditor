@@ -60,46 +60,6 @@ def remove_curator_prefix(text: str) -> str:
     text = re.sub(r'[.!?]\s*Куратор:\s*', '. ', text, flags=re.IGNORECASE)
     return text.strip()
 
-
-def semantic_similarity(sentence1, sentence2, use_lemmatization=True):
-    """
-    Вычисляет семантическую близость двух предложений.
-    Возвращает float от 0 до 1.
-    """
-    import string
-    translator = str.maketrans('', '', string.punctuation)
-
-    # Удаляем "Куратор:" из предложений перед обработкой
-    sentence1 = remove_curator_prefix(sentence1)
-    sentence2 = remove_curator_prefix(sentence2)
-
-    # Очищаем от знаков препинания
-    clean_s1 = sentence1.lower().translate(translator)
-    clean_s2 = sentence2.lower().translate(translator)
-
-    # Применяем лемматизацию
-    if use_lemmatization and LEMMATIZATION_AVAILABLE:
-        clean_s1 = lemmatize_text(clean_s1)
-        clean_s2 = lemmatize_text(clean_s2)
-
-    # Разбиваем на слова
-    tokens1 = set(clean_s1.split())
-    tokens2 = set(clean_s2.split())
-
-    # Если оба множества пустые
-    if len(tokens1) == 0 and len(tokens2) == 0:
-        return 1.0
-    if len(tokens1) == 0 or len(tokens2) == 0:
-        return 0.0
-
-    # Вычисляем пересечение и объединение
-    intersection = tokens1.intersection(tokens2)
-    union = tokens1.union(tokens2)
-
-    sem_prox = round((len(intersection) / len(union)), 2)
-    return sem_prox
-
-
 def tokenize(text):
     """Разбивает текст на предложения"""
     sentences = re.split(r'[.!?]+', text)
