@@ -67,7 +67,7 @@ def tokenize(text):
     return sentences
 
 
-def extract_scripts(text, character, threshold=0.6, use_lemmatization=True, verbose=True):
+def extract_scripts(text, character, threshold=0.6, use_lemmatization=True):
     """
     Извлекает сценарий из текста.
     """
@@ -131,34 +131,10 @@ def extract_scripts(text, character, threshold=0.6, use_lemmatization=True, verb
             'passed': best_score >= threshold
         })
 
-    # Если включен подробный вывод - печатаем отчет
-    if verbose:
-        print_results(results)
-
     return sequence
 
-
-def print_results(results):
-    """
-    Выводит результаты
-    """
-    print("=" * 80)
-    print("ИТОГОВЫЙ СЦЕНАРИЙ")
-    print("=" * 80)
-
-    for result in results:
-        status = "OK" if result['passed'] else "NO"
-        key_display = result['best_key'] if result['best_key'] is not None else "None"
-        # Используем очищенное предложение для отображения (без "Куратор:")
-        sentence_display = result['clean_sentence'].replace('"', '\\"')
-        print(
-            f"{status} Предложение {result['index']}: \"{sentence_display}\" -> {key_display} (оценка: {result['best_score']})")
-
-    print("=" * 80)
-
-
 def build_dict_char(scripts):
-    """Построение словаря переходов между состояниями"""
+    """Построение словаря характеристик"""
     unique_elements = set()
     for script in scripts:
         unique_elements.update(script)
